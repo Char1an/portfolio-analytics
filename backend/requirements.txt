@@ -1,0 +1,17 @@
+# ── Backend Framework ──
+fastapi==0.111.0
+uvicorn[standard]==0.30.1
+python-multipart==0.0.9
+
+# ── Data & Analytics ──
+pandas==2.0.3
+numpy==1.24.4
+scipy==1.11.4
+requests==2.31.0
+
+# ── Machine Learning ──
+scikit-learn==1.3.2
+joblib==1.3.2
+
+# ── CORS ──
+pydantic==2.7.4

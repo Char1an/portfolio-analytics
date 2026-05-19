@@ -1,0 +1,23 @@
+# Render.com Blueprint — one-click deploy for the Folio Klarity backend.
+# Sign in at https://render.com with GitHub, then:
+#   New + → Blueprint → select Char1an/portfolio-analytics
+# Render will read this file and provision the service.
+services:
+  - type: web
+    name: folio-klarity-api
+    runtime: python
+    plan: free                       # free tier (sleeps after 15 min idle)
+    rootDir: backend
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    autoDeploy: true
+    envVars:
+      - key: ENV
+        value: production
+      - key: PORTFOLIO_SECRET        # generated once and stored by Render
+        generateValue: true
+      - key: EXTRA_CORS_ORIGINS      # set this AFTER deploying the frontend
+        value: https://folio-klarity.vercel.app
+      - key: PYTHON_VERSION
+        value: "3.11"

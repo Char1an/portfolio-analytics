@@ -1,0 +1,55 @@
+# ── OS / Editor ────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.swp
+
+# ── Python ─────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+
+# Virtual environments
+backend/venv/
+backend/.venv/
+venv/
+.venv/
+env/
+
+# ── Node / Frontend ────────────────────────────────────────────
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# ── Environment / Secrets ──────────────────────────────────────
+.env
+.env.local
+.env.*.local
+*.pem
+*.key
+
+# ── Data Cache & User Data (regenerated at runtime) ────────────
+backend/data/cache/
+backend/data/users.json
+
+# ── ML Models (regenerated on-demand) ──────────────────────────
+backend/ml/models/
+*.pkl
+*.joblib
+
+# ── Logs ───────────────────────────────────────────────────────
+*.log
+logs/
+
+# ── Build artifacts ────────────────────────────────────────────
+build/
+dist/
+*.tsbuildinfo
