@@ -3,6 +3,7 @@ import {
   LayoutDashboard, Briefcase, BarChart3, Brain, Flame,
   Settings2, TrendingUp, Target, Receipt, Search,
   LogIn, LogOut, User, Activity, Layers, FlaskConical, Bot,
+  Banknote, GitCompare,
 } from 'lucide-react';
 import { useAuth } from '../../contexts/auth';
 
@@ -13,6 +14,7 @@ const NAV_GROUPS = [
       { to: '/', icon: LayoutDashboard, label: 'Dashboard' },
       { to: '/portfolio', icon: Briefcase, label: 'Portfolio' },
       { to: '/funds', icon: Search, label: 'Fund Browser' },
+      { to: '/compare', icon: GitCompare, label: 'Compare Funds' },
     ],
   },
   {
@@ -28,6 +30,7 @@ const NAV_GROUPS = [
     items: [
       { to: '/optimizer', icon: Settings2, label: 'Optimizer' },
       { to: '/goal', icon: Target, label: 'Goal Planner' },
+      { to: '/swp', icon: Banknote, label: 'SWP Calculator' },
       { to: '/tax', icon: Receipt, label: 'Tax Planning' },
     ],
   },

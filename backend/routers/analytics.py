@@ -231,20 +231,126 @@ def efficient_frontier(req: OptimizeRequest):
 
 @router.post("/compare")
 def compare(req: PerformanceRequest):
-    """Compare multiple funds over a common period."""
+    """
+    Rich side-by-side fund comparison: returns over multiple windows,
+    risk metrics (vol/Sharpe/Sortino/MaxDD), pairwise correlation matrix,
+    best/worst calendar year, and a one-line verdict per fund.
+    Up to ~6 funds at a time.
+    """
+    import numpy as np
     codes = [f.scheme_code for f in req.funds]
     nav_dict = fetch_multiple_navs(codes)
-
     if not nav_dict:
         raise HTTPException(status_code=404, detail="No fund data found")
 
-    results = compare_funds(nav_dict, period_years=5)
-
     name_map = {f.scheme_code: f.name or f.scheme_code for f in req.funds}
-    for r in results:
-        r["name"] = name_map.get(r["scheme_code"], r["scheme_code"])
+    cat_map  = {f.scheme_code: f.category or "—" for f in req.funds}
 
-    return {"comparison": results}
+    funds_out = []
+    return_series = {}   # for correlation matrix
+
+    for code, raw in nav_dict.items():
+        df = raw.copy()
+        df["date"] = pd.to_datetime(df["date"])
+        df = df.sort_values("date").reset_index(drop=True)
+        if len(df) < 30:
+            continue
+        df = clean_nav_data(df)
+
+        latest_nav   = float(df["nav"].iloc[-1])
+        latest_date  = str(df["date"].iloc[-1].date())
+        inception    = str(df["date"].iloc[0].date())
+        years_avail  = (df["date"].iloc[-1] - df["date"].iloc[0]).days / 365.25
+
+        # Multi-window returns
+        def _ret(days):
+            if len(df) <= days: return None
+            start = float(df["nav"].iloc[-(days + 1)])
+            return round((latest_nav - start) / max(start, 1e-9) * 100, 2)
+
+        def _cagr(days):
+            r = _ret(days)
+            if r is None: return None
+            yrs = days / 365.25
+            return round(((1 + r/100) ** (1/yrs) - 1) * 100, 2) if yrs >= 1 else r
+
+        returns = {
+            "1m":  _ret(30),
+            "3m":  _ret(90),
+            "6m":  _ret(180),
+            "1y":  _cagr(365),
+            "3y":  _cagr(1095),
+            "5y":  _cagr(1825),
+            "inception": round((((latest_nav / float(df["nav"].iloc[0])) ** (1/max(years_avail, 0.01))) - 1) * 100, 2) if years_avail >= 0.5 else None,
+        }
+
+        # Risk metrics
+        risk = calculate_risk_score(df)
+        dd   = risk.get("max_drawdown", {}) if isinstance(risk.get("max_drawdown"), dict) else {}
+
+        # Best/worst calendar year
+        yearly = df.copy()
+        yearly["year"] = yearly["date"].dt.year
+        first_per_yr = yearly.groupby("year")["nav"].first()
+        last_per_yr  = yearly.groupby("year")["nav"].last()
+        yearly_ret   = ((last_per_yr - first_per_yr) / first_per_yr * 100).dropna()
+        best_yr  = {"year": int(yearly_ret.idxmax()), "return_pct": round(float(yearly_ret.max()), 2)} if len(yearly_ret) else None
+        worst_yr = {"year": int(yearly_ret.idxmin()), "return_pct": round(float(yearly_ret.min()), 2)} if len(yearly_ret) else None
+
+        # Verdict — combine Sharpe + drawdown + recovery
+        sharpe = risk.get("sharpe_ratio", 0)
+        dd_pct = dd.get("max_drawdown_pct", 0)
+        if sharpe >= 1.2 and dd_pct < 30:
+            verdict = "🏆 Strong risk-adjusted performer"
+        elif sharpe >= 0.8:
+            verdict = "👍 Decent returns for the risk"
+        elif sharpe >= 0.3:
+            verdict = "⚠️ Modest reward for volatility"
+        else:
+            verdict = "❌ High risk, low risk-adjusted return"
+
+        funds_out.append({
+            "scheme_code":   code,
+            "name":          name_map.get(code, code),
+            "category":      cat_map.get(code, "—"),
+            "latest_nav":    round(latest_nav, 2),
+            "latest_date":   latest_date,
+            "inception":     inception,
+            "years_history": round(years_avail, 1),
+            "returns":       returns,
+            "risk": {
+                "volatility_pct":  risk.get("volatility_pct"),
+                "sharpe_ratio":    risk.get("sharpe_ratio"),
+                "sortino_ratio":   risk.get("sortino_ratio"),
+                "max_drawdown_pct": dd.get("max_drawdown_pct"),
+                "recovery_days":   dd.get("recovery_days"),
+                "risk_score":      risk.get("risk_score"),
+                "risk_category":   risk.get("risk_category"),
+            },
+            "best_year":  best_yr,
+            "worst_year": worst_yr,
+            "verdict":    verdict,
+        })
+
+        # Build aligned return series for correlation (use weekly to reduce noise)
+        weekly = df.set_index("date")["nav"].resample("W").last().pct_change().dropna()
+        return_series[code] = weekly
+
+    # Pairwise correlation matrix (only if we have ≥2 funds with overlap)
+    correlation = {}
+    if len(return_series) >= 2:
+        aligned = pd.concat(return_series, axis=1).dropna()
+        if len(aligned) >= 12:  # at least 12 weeks of overlap
+            corr_df = aligned.corr()
+            correlation = {
+                a: {b: round(float(corr_df.loc[a, b]), 3) for b in corr_df.columns}
+                for a in corr_df.index
+            }
+
+    return {
+        "funds":       funds_out,
+        "correlation": correlation,
+    }
 
 
 # ── Tax Loss Harvesting ────────────────────────────────────────────────────────

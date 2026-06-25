@@ -15,6 +15,8 @@ import RegimeAnalysis from './pages/RegimeAnalysis';
 import Overlap from './pages/Overlap';
 import FactorAttribution from './pages/FactorAttribution';
 import Agent from './pages/Agent';
+import SWP from './pages/SWP';
+import FundCompare from './pages/FundCompare';
 
 export default function App() {
   return (
@@ -35,6 +37,8 @@ export default function App() {
             <Route path="/optimizer"     element={<Optimizer />} />
             <Route path="/goal"          element={<GoalPlanner />} />
             <Route path="/tax"           element={<Tax />} />
+            <Route path="/swp"           element={<SWP />} />
+            <Route path="/compare"       element={<FundCompare />} />
             <Route path="/regime"            element={<RegimeAnalysis />} />
             <Route path="/overlap"           element={<Overlap />} />
             <Route path="/factor-attribution" element={<FactorAttribution />} />
