@@ -1,6 +1,6 @@
 import axios from 'axios';
 
-// In dev, Vite proxies /api → http://localhost:8000 (see vite.config.js).
+// Auto-deploy test 1782403152 — In dev, Vite proxies /api → http://localhost:8000 (see vite.config.js).
 // In prod, set VITE_API_URL to your deployed backend, e.g. https://folio-klarity-api.onrender.com/api
 const API_BASE = import.meta.env.VITE_API_URL || '/api';
 
