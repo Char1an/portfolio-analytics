@@ -1,6 +1,6 @@
 import axios from 'axios';
 
-// Auto-deploy test 1782403152 — In dev, Vite proxies /api → http://localhost:8000 (see vite.config.js).
+// In dev, Vite proxies /api → http://localhost:8000 (see vite.config.js).
 // In prod, set VITE_API_URL to your deployed backend, e.g. https://folio-klarity-api.onrender.com/api
 const API_BASE = import.meta.env.VITE_API_URL || '/api';
 
@@ -45,6 +45,7 @@ export const getPortfolioMetrics = (data) => api.post('/analytics/portfolio-metr
 export const optimizePortfolio   = (data) => api.post('/analytics/optimize',          data);
 export const getEfficientFrontier= (data) => api.post('/analytics/efficient-frontier',data);
 export const compareFunds        = (data) => api.post('/analytics/compare',           data);
+export const getHealthScore      = (data) => api.post('/analytics/health-score',      data);
 
 // ── Forecast ──
 export const trainModels   = (data) => api.post('/forecast/train',         data);

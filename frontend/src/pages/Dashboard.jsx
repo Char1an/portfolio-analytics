@@ -2,15 +2,18 @@ import { useState, useEffect, useRef } from 'react';
 import {
   TrendingUp, TrendingDown, IndianRupee, Shield,
   BarChart3, Zap, RefreshCw, ArrowUpRight, ArrowDownRight, Briefcase,
+  Sparkles, Settings2, GitCompare, Banknote, Brain, Flame, Activity, Layers, Bot, Play, Code2, Award,
 } from 'lucide-react';
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, PieChart as RPie, Pie, Cell,
 } from 'recharts';
-import { getNavHistory, analyzePerformance, analyzeRisk, generateInsights } from '../services/api';
+import { getNavHistory, analyzePerformance, analyzeRisk, generateInsights, getHealthScore } from '../services/api';
 import { formatCurrency, formatPercent, CHART_COLORS } from '../utils/formatters';
 import { usePortfolio } from '../hooks/usePortfolio';
 import { useAuth } from '../contexts/auth';
+import { savePortfolio, syncPortfolioToServer, DEFAULT_FUNDS } from '../utils/portfolioStore';
+import { useNavigate } from 'react-router-dom';
 
 // ── Derived short name ──
 const shortName = (name) => name.replace(/\s*-\s*(Direct|Regular)\s*(Growth|Plan)?\s*/i, '').trim();
@@ -63,8 +66,188 @@ function KPI({ icon, label, value, sub, accent, color }) {
   );
 }
 
+// ── Landing Hero (empty portfolio) ───────────────────────────────────────
+const FEATURES = [
+  { icon: Settings2,   title: 'Portfolio Optimizer',    desc: 'Modern Portfolio Theory + scipy SLSQP', color: '#22c55e' },
+  { icon: GitCompare,  title: 'Fund Comparison',        desc: 'Correlation matrix + auto verdicts',   color: '#6366f1' },
+  { icon: Banknote,    title: 'SWP Calculator',         desc: 'Sustainability + real-fund backtest',  color: '#22d3ee' },
+  { icon: Brain,       title: 'ML Forecasting',         desc: 'RF / GBR / LR + SHAP explainability',  color: '#a78bfa' },
+  { icon: Flame,       title: 'Monte Carlo Simulation', desc: 'GBM stochastic paths, 1000 runs',      color: '#f59e0b' },
+  { icon: Activity,    title: 'Regime Detection',       desc: 'GMM-based Bull/Bear/Sideways states',  color: '#ec4899' },
+  { icon: Layers,      title: 'Portfolio Overlap',      desc: 'Pearson correlation on NAV returns',   color: '#f472b6' },
+  { icon: Bot,         title: 'AI Agent',               desc: 'Llama 3.3 70B via Groq, tool-calling', color: '#818cf8' },
+];
+
+function LandingHero({ onTryDemo, onExplore }) {
+  return (
+    <div className="animate-fade-in" style={{ paddingTop: 20 }}>
+      {/* Hero */}
+      <div style={{ textAlign: 'center', paddingTop: 40, paddingBottom: 40 }}>
+        <div style={{
+          display: 'inline-flex', alignItems: 'center', gap: 6, padding: '5px 12px',
+          background: 'rgba(99,102,241,0.10)', border: '1px solid rgba(99,102,241,0.3)',
+          borderRadius: 20, fontSize: 10, color: 'var(--indigo)', fontWeight: 700,
+          letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 20,
+        }}>
+          <Sparkles size={11} /> Open-source · Free · No signup required
+        </div>
+        <h1 style={{ fontSize: 44, fontWeight: 800, letterSpacing: '-0.03em', lineHeight: 1.1, marginBottom: 14 }}>
+          Portfolio analytics for<br />
+          <span style={{ background: 'linear-gradient(135deg,#6366f1,#a78bfa)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
+            Indian mutual funds
+          </span>
+        </h1>
+        <p style={{ fontSize: 15, color: 'var(--text-3)', maxWidth: 620, margin: '0 auto 28px', lineHeight: 1.55 }}>
+          Real-time NAV data. Modern Portfolio Theory optimization. Monte Carlo simulation.
+          ML forecasting with SHAP explainability. Budget 2024-compliant tax planning. All open source.
+        </p>
+        <div style={{ display: 'flex', gap: 12, justifyContent: 'center', flexWrap: 'wrap' }}>
+          <button onClick={onTryDemo} className="btn-primary" style={{ fontSize: 14, padding: '11px 22px', display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+            <Play size={14} /> Try Live Demo
+          </button>
+          <button onClick={onExplore} className="btn-secondary" style={{ fontSize: 14, padding: '11px 22px', display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+            <Briefcase size={14} /> Build Your Own Portfolio
+          </button>
+          <a href="https://github.com/Char1an/portfolio-analytics" target="_blank" rel="noreferrer" className="btn-secondary"
+             style={{ fontSize: 14, padding: '11px 22px', display: 'inline-flex', alignItems: 'center', gap: 8, textDecoration: 'none' }}>
+            <Code2 size={14} /> View Source
+          </a>
+        </div>
+      </div>
+
+      {/* Stats strip */}
+      <div className="glass-card" style={{ padding: 20, marginTop: 20, marginBottom: 32 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 20, textAlign: 'center' }}>
+          {[
+            { label: 'Schemes tracked', value: '198',  color: 'var(--indigo)' },
+            { label: 'Analytics tools',  value: '16',   color: 'var(--green)' },
+            { label: 'ML models',        value: '3',    color: '#a78bfa' },
+            { label: 'Live NAV updates', value: '24h',  color: '#f59e0b' },
+          ].map(s => (
+            <div key={s.label}>
+              <p style={{ fontSize: 28, fontWeight: 800, color: s.color, fontFamily: 'monospace', letterSpacing: '-0.02em' }}>{s.value}</p>
+              <p style={{ fontSize: 10, color: 'var(--text-3)', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', marginTop: 4 }}>{s.label}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Feature grid */}
+      <div>
+        <h2 style={{ fontSize: 20, fontWeight: 800, marginBottom: 16, textAlign: 'center', letterSpacing: '-0.02em' }}>
+          Everything you'd need — and things Groww doesn't have
+        </h2>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12 }} className="feature-grid">
+          {FEATURES.map(({ icon: Icon, title, desc, color }) => (
+            <div key={title} className="glass-card" style={{ padding: 18, textAlign: 'left' }}>
+              <div style={{ width: 36, height: 36, borderRadius: 10, background: `${color}18`, border: `1px solid ${color}40`,
+                display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 10 }}>
+                <Icon size={17} style={{ color }} />
+              </div>
+              <p style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-1)', marginBottom: 3 }}>{title}</p>
+              <p style={{ fontSize: 11, color: 'var(--text-3)', lineHeight: 1.5 }}>{desc}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Final CTA */}
+      <div style={{ textAlign: 'center', paddingTop: 40, paddingBottom: 20 }}>
+        <p style={{ fontSize: 12, color: 'var(--text-3)', marginBottom: 14 }}>
+          Click <strong style={{ color: 'var(--indigo)' }}>Try Live Demo</strong> to load a sample portfolio and start exploring — no signup needed.
+        </p>
+        <p style={{ fontSize: 10, color: 'var(--text-3)', opacity: 0.6 }}>
+          Educational tool — not investment advice. Data via MFAPI.in. Built with FastAPI + React.
+        </p>
+      </div>
+    </div>
+  );
+}
+
+// ── Portfolio Health Score gauge ─────────────────────────────────────────
+function HealthGauge({ score, grade, tone, components, recommendations }) {
+  const [expanded, setExpanded] = useState(false);
+  const color = score >= 80 ? 'var(--green)' : score >= 60 ? '#22d3ee' : score >= 40 ? '#f59e0b' : 'var(--red)';
+  const bg    = score >= 80 ? 'rgba(34,197,94,0.10)' : score >= 60 ? 'rgba(34,211,238,0.10)' : score >= 40 ? 'rgba(245,158,11,0.10)' : 'rgba(239,68,68,0.10)';
+  // Half-donut math: circumference 251, arc = score/100 × 251
+  const arc = (score / 100) * 251;
+
+  return (
+    <div className="glass-card" style={{ padding: 20, borderColor: `${color.replace('var(', 'transparent').replace(')', '')}` }}>
+      <div style={{ display: 'flex', gap: 22, alignItems: 'center' }}>
+        {/* Gauge */}
+        <div style={{ position: 'relative', width: 130, height: 90, flexShrink: 0 }}>
+          <svg viewBox="0 0 200 120" style={{ width: '100%', height: '100%' }}>
+            <path d="M 20 100 A 80 80 0 0 1 180 100" fill="none" stroke="rgba(255,255,255,0.06)" strokeWidth="14" strokeLinecap="round" />
+            <path d="M 20 100 A 80 80 0 0 1 180 100" fill="none" stroke={color} strokeWidth="14" strokeLinecap="round"
+              strokeDasharray={`${arc} 251`} style={{ transition: 'stroke-dasharray 0.8s ease' }} />
+          </svg>
+          <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-end', paddingBottom: 6 }}>
+            <p style={{ fontSize: 32, fontWeight: 800, fontFamily: 'monospace', color, lineHeight: 1, letterSpacing: '-0.02em' }}>{score}</p>
+            <p style={{ fontSize: 9, color: 'var(--text-3)', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase' }}>/ 100</p>
+          </div>
+        </div>
+
+        <div style={{ flex: 1 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+            <Award size={14} style={{ color }} />
+            <p style={{ fontSize: 11, color: 'var(--text-3)', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase' }}>Portfolio Health</p>
+          </div>
+          <p style={{ fontSize: 22, fontWeight: 800, color, marginBottom: 2, letterSpacing: '-0.02em' }}>
+            Grade {grade} · {tone}
+          </p>
+          <p style={{ fontSize: 11, color: 'var(--text-3)', marginBottom: 8 }}>
+            Composite score across 5 dimensions. Click below to see the breakdown.
+          </p>
+          <button onClick={() => setExpanded(v => !v)} style={{
+            padding: '5px 12px', borderRadius: 8, border: `1px solid ${color}30`,
+            background: bg, color, fontSize: 11, fontWeight: 700, cursor: 'pointer',
+          }}>
+            {expanded ? 'Hide breakdown' : 'View breakdown'}
+          </button>
+        </div>
+      </div>
+
+      {expanded && components && (
+        <div style={{ marginTop: 18, paddingTop: 18, borderTop: '1px solid var(--border)' }}>
+          {Object.entries(components).map(([key, c]) => {
+            const cScore = c.score;
+            const cColor = cScore >= 70 ? 'var(--green)' : cScore >= 50 ? '#22d3ee' : cScore >= 30 ? '#f59e0b' : 'var(--red)';
+            const nice = key.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase());
+            return (
+              <div key={key} style={{ marginBottom: 14 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+                  <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-1)' }}>{nice} <span style={{ color: 'var(--text-3)', fontSize: 9, marginLeft: 4 }}>({c.weight}%)</span></span>
+                  <span style={{ fontSize: 12, fontWeight: 700, fontFamily: 'monospace', color: cColor }}>{cScore}/100</span>
+                </div>
+                <div style={{ height: 6, background: 'rgba(255,255,255,0.05)', borderRadius: 3, overflow: 'hidden' }}>
+                  <div style={{ width: `${cScore}%`, height: '100%', background: cColor, transition: 'width 0.6s' }} />
+                </div>
+                <p style={{ fontSize: 10, color: 'var(--text-3)', marginTop: 3 }}>{c.detail}</p>
+              </div>
+            );
+          })}
+          {recommendations?.length > 0 && (
+            <div style={{ marginTop: 12, padding: 12, background: 'rgba(99,102,241,0.05)', border: '1px solid rgba(99,102,241,0.2)', borderRadius: 8 }}>
+              <p style={{ fontSize: 10, color: 'var(--indigo)', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 6 }}>
+                Recommendations
+              </p>
+              <ul style={{ paddingLeft: 16, margin: 0 }}>
+                {recommendations.map((r, i) => (
+                  <li key={i} style={{ fontSize: 11, color: 'var(--text-2)', lineHeight: 1.5, marginBottom: 4 }}>{r}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function Dashboard() {
   const portfolio                      = usePortfolio();
+  const navigate                       = useNavigate();
   const [loading, setLoading]         = useState(true);
   const [error, setError]             = useState(null);
   const [perfData, setPerfData]       = useState(null);
@@ -73,7 +256,13 @@ export default function Dashboard() {
   const [navChartLines, setNavChartLines] = useState([]); // [{key, color}]
   const [selectedNavCode, setSelectedNavCode] = useState(null);
   const [insights, setInsights]       = useState([]);
+  const [healthScore, setHealthScore] = useState(null);
   const { user }                      = useAuth();
+
+  function tryDemo() {
+    savePortfolio(DEFAULT_FUNDS);
+    syncPortfolioToServer(DEFAULT_FUNDS);
+  }
   const displayName                   = user?.username
     ? user.username.charAt(0).toUpperCase() + user.username.slice(1)
     : 'your';
@@ -94,13 +283,15 @@ export default function Dashboard() {
     setLoading(true);
     setError(null);
     try {
-      const [perfResp, riskResp] = await Promise.all([
+      const [perfResp, riskResp, healthResp] = await Promise.all([
         analyzePerformance({ funds, mode: 'sip' }),
         analyzeRisk({ funds }),
+        getHealthScore({ funds }).catch(() => ({ data: null })),
       ]);
       const perf = perfResp.data;
       setPerfData(perf);
       setRiskData(riskResp.data);
+      setHealthScore(healthResp.data);
 
       // NAV charts — load ALL portfolio funds, normalize to base-100
       const navFetches = funds.map(f => getNavHistory(f.scheme_code, '3Y').catch(() => null));
@@ -168,20 +359,7 @@ export default function Dashboard() {
         color: CHART_COLORS[i % CHART_COLORS.length],
       }));
 
-  if (!loading && portfolio.length === 0) return (
-    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '60vh' }}>
-      <div className="animate-fade-in" style={{ textAlign: 'center' }}>
-        <Briefcase size={52} style={{ margin: '0 auto 18px', opacity: 0.18, display: 'block' }} />
-        <h2 style={{ fontSize: 20, fontWeight: 700, marginBottom: 8 }}>No funds in your portfolio</h2>
-        <p style={{ color: 'var(--text-3)', fontSize: 13, marginBottom: 22 }}>
-          Add funds in Portfolio Builder to see your dashboard analytics.
-        </p>
-        <a href="/portfolio" className="btn-primary" style={{ textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 7, fontSize: 13 }}>
-          Go to Portfolio Builder
-        </a>
-      </div>
-    </div>
-  );
+  if (!loading && portfolio.length === 0) return <LandingHero onTryDemo={tryDemo} onExplore={() => navigate('/portfolio')} />;
 
   if (loading) return (
     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '60vh' }}>
@@ -270,6 +448,17 @@ export default function Dashboard() {
           color={avgRisk ? (avgRisk <= 3.5 ? 'green' : avgRisk <= 6.5 ? 'amber' : 'red') : 'indigo'}
         />
       </div>
+
+      {/* ── Portfolio Health Score ── */}
+      {healthScore && healthScore.overall > 0 && (
+        <HealthGauge
+          score={healthScore.overall}
+          grade={healthScore.grade}
+          tone={healthScore.tone}
+          components={healthScore.components}
+          recommendations={healthScore.recommendations}
+        />
+      )}
 
       {/* ── Charts Row ── */}
       <div className="grid grid-cols-3 gap-4 chart-grid">

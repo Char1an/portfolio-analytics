@@ -23,6 +23,7 @@ from analytics.regime import detect_regimes, compute_fund_regime_performance
 from analytics.overlap import compute_overlap
 from analytics.behavioral_bias import analyze_behavioral_biases
 from analytics.factor_attribution import run_factor_attribution, FACTOR_CODES
+from analytics.health_score import calculate_health_score
 
 router = APIRouter(prefix="/api/analytics", tags=["Analytics"])
 
@@ -599,3 +600,52 @@ def portfolio_metrics(req: PortfolioMetricsRequest):
     ]
     metrics = compute_simplified_biases(funds_dict)
     return metrics
+
+
+# ── Portfolio Health Score ─────────────────────────────────────────────
+@router.post("/health-score")
+def health_score(req: PerformanceRequest):
+    """
+    Compute a composite 0–100 Portfolio Health Score based on:
+    diversification, concentration, cost drag (Direct vs Regular),
+    risk-adjusted return (portfolio Sharpe), and tax efficiency.
+    """
+    if not req.funds:
+        return calculate_health_score([], {}, None)
+
+    funds_dict = [{
+        "scheme_code":       f.scheme_code,
+        "name":              f.name or f.scheme_code,
+        "category":          f.category,
+        "investment_amount": f.investment_amount,
+        "monthly_sip":       f.monthly_sip,
+        "purchase_date":     f.purchase_date,
+        "plan_type":         f.plan_type,
+    } for f in req.funds]
+
+    # Fetch NAVs for correlation calc + portfolio Sharpe
+    codes = [f["scheme_code"] for f in funds_dict]
+    nav_dict = fetch_multiple_navs(codes)
+    cleaned = {c: clean_nav_data(df) for c, df in nav_dict.items()} if nav_dict else {}
+
+    # Compute weights and portfolio Sharpe
+    total = sum((f["investment_amount"] or 0) + (f["monthly_sip"] or 0) * 12 for f in funds_dict) or 1
+    weights = {f["scheme_code"]: ((f["investment_amount"] or 0) + (f["monthly_sip"] or 0) * 12) / total for f in funds_dict}
+
+    port_sharpe = None
+    if len(cleaned) >= 2:
+        try:
+            port_risk = analyze_portfolio_risk(cleaned, weights)
+            port_sharpe = port_risk.get("sharpe_ratio")
+        except Exception:
+            port_sharpe = None
+    elif len(cleaned) == 1:
+        # Single fund — use its own Sharpe
+        only = next(iter(cleaned.values()))
+        try:
+            r = calculate_risk_score(only)
+            port_sharpe = r.get("sharpe_ratio")
+        except Exception:
+            port_sharpe = None
+
+    return calculate_health_score(funds_dict, cleaned, port_sharpe)
