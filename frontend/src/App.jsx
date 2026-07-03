@@ -17,6 +17,8 @@ import FactorAttribution from './pages/FactorAttribution';
 import Agent from './pages/Agent';
 import SWP from './pages/SWP';
 import FundCompare from './pages/FundCompare';
+import RebalanceSimulator from './pages/RebalanceSimulator';
+import TimeMachine from './pages/TimeMachine';
 
 export default function App() {
   return (
@@ -39,6 +41,8 @@ export default function App() {
             <Route path="/tax"           element={<Tax />} />
             <Route path="/swp"           element={<SWP />} />
             <Route path="/compare"       element={<FundCompare />} />
+            <Route path="/rebalance"     element={<RebalanceSimulator />} />
+            <Route path="/time-machine"  element={<TimeMachine />} />
             <Route path="/regime"            element={<RegimeAnalysis />} />
             <Route path="/overlap"           element={<Overlap />} />
             <Route path="/factor-attribution" element={<FactorAttribution />} />

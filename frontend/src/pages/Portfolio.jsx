@@ -1,9 +1,10 @@
 import { useState, useCallback, useEffect, useMemo, useRef } from 'react';
-import { Search, Plus, X, Briefcase, ArrowRight, RotateCcw, Info, ChevronDown, ChevronUp, AlertTriangle, CheckCircle2, Clock, Trash2 } from 'lucide-react';
+import { Search, Plus, X, Briefcase, ArrowRight, RotateCcw, Info, ChevronDown, ChevronUp, AlertTriangle, CheckCircle2, Clock, Trash2, Upload } from 'lucide-react';
 import { searchFunds } from '../services/api';
 import { formatCurrency } from '../utils/formatters';
 import { loadPortfolio, savePortfolio, syncPortfolioToServer, DEFAULT_FUNDS } from '../utils/portfolioStore';
 import { useAuth } from '../contexts/auth';
+import CASImport from '../components/CASImport';
 
 const shortName = (name) => name.replace(/\s*-\s*(Direct|Regular)\s*(Growth|Plan)?\s*/i, '').trim();
 
@@ -24,6 +25,7 @@ export default function Portfolio() {
   const [txnForm, setTxnForm]         = useState(null); // { fundCode, ...EMPTY_TXN }
   const [flash, setFlash]             = useState(null);
   const [confirmReset, setConfirmReset] = useState(false);
+  const [showCASImport, setShowCASImport] = useState(false);
   const { hydrated, isLoggedIn }      = useAuth();
   const hasUserEdit                   = useRef(false);
 
@@ -211,12 +213,33 @@ export default function Portfolio() {
               <button onClick={() => setConfirmReset(false)} className="btn-secondary" style={{ fontSize: 11, padding: '4px 10px' }}>Cancel</button>
             </span>
           ) : (
-            <button onClick={resetToDefaults} className="btn-secondary" style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12 }}>
-              <RotateCcw size={12} /> Reset
-            </button>
+            <>
+              <button onClick={() => setShowCASImport(true)} className="btn-primary" style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12 }}>
+                <Upload size={12} /> Import CAS
+              </button>
+              <button onClick={resetToDefaults} className="btn-secondary" style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12 }}>
+                <RotateCcw size={12} /> Reset
+              </button>
+            </>
           )}
         </div>
       </div>
+
+      {showCASImport && (
+        <CASImport
+          onClose={() => setShowCASImport(false)}
+          onImport={(newFunds) => {
+            // Merge with existing portfolio, keeping any funds not being re-imported
+            editPortfolio(prev => {
+              const existingCodes = new Set(newFunds.map(f => f.scheme_code));
+              const kept = prev.filter(f => !existingCodes.has(f.scheme_code));
+              return [...kept, ...newFunds];
+            });
+            setShowCASImport(false);
+            setFlash({ type: 'success', msg: `Imported ${newFunds.length} fund${newFunds.length === 1 ? '' : 's'} from CAS statement.` });
+          }}
+        />
+      )}
 
       {/* ── Mode Toggle ── */}
       <div className="tab-bar">

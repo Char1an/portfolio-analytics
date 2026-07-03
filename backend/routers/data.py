@@ -1,7 +1,7 @@
 """
 Data Router — Fund search, NAV data, scheme listings, and index benchmarks.
 """
-from fastapi import APIRouter, Query, HTTPException
+from fastapi import APIRouter, Query, HTTPException, UploadFile, File, Form
 from typing import Optional
 import json, os
 
@@ -11,6 +11,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 from data.fetcher import search_schemes, fetch_nav_history, fetch_latest_nav, fetch_scheme_meta
 from data.schemes import POPULAR_SCHEMES, CATEGORIES, get_schemes_by_category, get_benchmarks
 from data.preprocessor import clean_nav_data, compute_returns, compute_rolling_stats
+from data.cas_parser import parse_cas
 
 router = APIRouter(prefix="/api/data", tags=["Data"])
 
@@ -182,3 +183,30 @@ def get_nav_stats(scheme_code: str):
         records.append(record)
 
     return {"scheme_code": scheme_code, "stats": records}
+
+
+# ── CAS (CAMS/KFinTech) statement upload ────────────────────────────────
+@router.post("/import-cas")
+async def import_cas(
+    file: UploadFile = File(...),
+    password: Optional[str] = Form(None),
+):
+    """
+    Upload a CAMS or KFinTech consolidated account statement (PDF).
+    Returns the parsed funds + transactions, matched against known schemes.
+    Frontend then previews and confirms before merging into the user's portfolio.
+    """
+    if not file.filename.lower().endswith(".pdf"):
+        raise HTTPException(status_code=400, detail="File must be a PDF.")
+
+    try:
+        pdf_bytes = await file.read()
+        if len(pdf_bytes) > 15 * 1024 * 1024:
+            raise HTTPException(status_code=413, detail="PDF too large (max 15 MB).")
+        result = parse_cas(pdf_bytes, password=password)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to parse PDF: {e}")
+
+    return result

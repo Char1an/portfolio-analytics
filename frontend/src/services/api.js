@@ -46,6 +46,7 @@ export const optimizePortfolio   = (data) => api.post('/analytics/optimize',    
 export const getEfficientFrontier= (data) => api.post('/analytics/efficient-frontier',data);
 export const compareFunds        = (data) => api.post('/analytics/compare',           data);
 export const getHealthScore      = (data) => api.post('/analytics/health-score',      data);
+export const getHistoricalSnapshot = (data) => api.post('/analytics/historical-snapshot', data);
 
 // ── Forecast ──
 export const trainModels   = (data) => api.post('/forecast/train',         data);

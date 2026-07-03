@@ -3,7 +3,7 @@ import {
   LayoutDashboard, Briefcase, BarChart3, Brain, Flame,
   Settings2, TrendingUp, Target, Receipt, Search,
   LogIn, LogOut, User, Activity, Layers, FlaskConical, Bot,
-  Banknote, GitCompare,
+  Banknote, GitCompare, Sliders, Clock,
 } from 'lucide-react';
 import { useAuth } from '../../contexts/auth';
 
@@ -21,6 +21,7 @@ const NAV_GROUPS = [
     label: 'Analytics',
     items: [
       { to: '/analytics', icon: BarChart3, label: 'Analytics' },
+      { to: '/time-machine', icon: Clock, label: 'Time Machine' },
       { to: '/forecast', icon: Brain, label: 'ML Forecast' },
       { to: '/simulation', icon: Flame, label: 'Simulation' },
     ],
@@ -29,6 +30,7 @@ const NAV_GROUPS = [
     label: 'Tools',
     items: [
       { to: '/optimizer', icon: Settings2, label: 'Optimizer' },
+      { to: '/rebalance', icon: Sliders, label: 'Rebalance Sim' },
       { to: '/goal', icon: Target, label: 'Goal Planner' },
       { to: '/swp', icon: Banknote, label: 'SWP Calculator' },
       { to: '/tax', icon: Receipt, label: 'Tax Planning' },

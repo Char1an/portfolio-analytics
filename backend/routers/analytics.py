@@ -649,3 +649,117 @@ def health_score(req: PerformanceRequest):
             port_sharpe = None
 
     return calculate_health_score(funds_dict, cleaned, port_sharpe)
+
+
+# ── Historical Snapshot (drawdown replay) ──────────────────────────────
+class HistoricalSnapshotRequest(BaseModel):
+    funds: List[FundInput]
+    as_of_date: str  # "YYYY-MM-DD"
+
+
+@router.post("/historical-snapshot")
+def historical_snapshot(req: HistoricalSnapshotRequest):
+    """
+    Compute what the user's portfolio value would have been on a past date.
+    Uses actual NAV history + each fund's purchase_date + monthly_sip.
+    Also returns drawdown-from-peak and days-since-peak for that date.
+    """
+    try:
+        target = pd.to_datetime(req.as_of_date).normalize()
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid as_of_date (need YYYY-MM-DD)")
+
+    fund_snapshots = []
+    total_invested = 0.0
+    total_value    = 0.0
+    max_ever_value = 0.0   # for drawdown calc
+    portfolio_curve = {}  # date -> total portfolio value across all funds
+
+    for f in req.funds:
+        df = fetch_nav_history(f.scheme_code)
+        if df is None or df.empty:
+            continue
+        df = clean_nav_data(df)
+        df["date"] = pd.to_datetime(df["date"])
+
+        # Only include funds that existed by the target date
+        df_upto = df[df["date"] <= target]
+        if df_upto.empty:
+            continue
+
+        # Simulate lumpsum + SIP up to target date, using each fund's purchase_date
+        purchase_dt = pd.to_datetime(f.purchase_date) if f.purchase_date else df["date"].min()
+        if purchase_dt > target:
+            continue  # fund not purchased by target date
+
+        # Filter NAVs between purchase and target
+        active = df_upto[df_upto["date"] >= purchase_dt].reset_index(drop=True)
+        if active.empty:
+            continue
+
+        # Compute units accumulated: lumpsum on purchase_dt + monthly SIP up to target
+        first_nav = float(active.iloc[0]["nav"])
+        target_nav = float(active.iloc[-1]["nav"])
+
+        units_lumpsum = (f.investment_amount or 0) / first_nav if first_nav > 0 else 0
+        invested_this = f.investment_amount or 0
+
+        # SIP on the 1st of every month between purchase_dt and target
+        if f.monthly_sip and f.monthly_sip > 0:
+            month_starts = pd.date_range(start=purchase_dt.replace(day=1), end=target, freq="MS")
+            for m in month_starts:
+                if m < purchase_dt: continue
+                # Find NAV on-or-after that month-start
+                after = active[active["date"] >= m]
+                if after.empty: continue
+                nav_at = float(after.iloc[0]["nav"])
+                units_lumpsum += f.monthly_sip / nav_at
+                invested_this += f.monthly_sip
+
+        current_val = units_lumpsum * target_nav
+
+        # Portfolio curve — sample this fund's value at ~30 points from purchase to target
+        step = max(1, len(active) // 30)
+        for i in range(0, len(active), step):
+            row = active.iloc[i]
+            date_str = str(row["date"].date())
+            portfolio_curve[date_str] = portfolio_curve.get(date_str, 0) + units_lumpsum * float(row["nav"]) * (i + 1) / len(active)
+
+        fund_snapshots.append({
+            "scheme_code":   f.scheme_code,
+            "name":          f.name or f.scheme_code,
+            "invested":      round(invested_this, 2),
+            "current_value": round(current_val, 2),
+            "gain":          round(current_val - invested_this, 2),
+            "gain_pct":      round((current_val - invested_this) / max(invested_this, 1) * 100, 2),
+            "target_nav":    round(target_nav, 4),
+        })
+        total_invested += invested_this
+        total_value    += current_val
+
+    # Sort portfolio curve chronologically
+    curve = [{"date": d, "value": round(v, 2)} for d, v in sorted(portfolio_curve.items())]
+
+    # Drawdown analytics from the curve
+    peak_value = 0
+    peak_date = None
+    drawdown_pct = 0
+    for point in curve:
+        if point["value"] > peak_value:
+            peak_value = point["value"]
+            peak_date = point["date"]
+    if peak_value > 0:
+        drawdown_pct = (total_value - peak_value) / peak_value * 100
+
+    return {
+        "as_of_date":    req.as_of_date,
+        "total_invested": round(total_invested, 2),
+        "total_value":    round(total_value, 2),
+        "gain":           round(total_value - total_invested, 2),
+        "gain_pct":       round((total_value - total_invested) / max(total_invested, 1) * 100, 2),
+        "drawdown_from_peak_pct": round(drawdown_pct, 2),
+        "peak_value":     round(peak_value, 2),
+        "peak_date":      peak_date,
+        "funds":          fund_snapshots,
+        "portfolio_curve": curve,
+    }
