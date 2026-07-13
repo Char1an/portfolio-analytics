@@ -17,6 +17,29 @@ api.interceptors.request.use(config => {
   return config;
 });
 
+// ── Pending-request tracker (powers the "server waking up" banner) ──
+// Render's free tier sleeps after 15 min idle; first request after that
+// takes 30-50s. We surface that instead of leaving the user staring at
+// a blank spinner wondering if the site is broken.
+let pendingCount = 0;
+const listeners = new Set();
+function notify() { listeners.forEach(fn => fn(pendingCount)); }
+
+export function subscribePendingRequests(fn) {
+  listeners.add(fn);
+  fn(pendingCount);
+  return () => listeners.delete(fn);
+}
+
+api.interceptors.request.use(config => {
+  pendingCount++; notify();
+  return config;
+});
+api.interceptors.response.use(
+  res => { pendingCount = Math.max(0, pendingCount - 1); notify(); return res; },
+  err => { pendingCount = Math.max(0, pendingCount - 1); notify(); return Promise.reject(err); }
+);
+
 // ── Auth / User ──
 export const registerUser          = (data)      => api.post('/user/register',   data);
 export const loginUser             = (data)      => api.post('/user/login',      data);

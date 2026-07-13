@@ -50,6 +50,8 @@ export default function CASImport({ onClose, onImport }) {
 
   function confirmImport() {
     if (!result) return;
+    const baseId = Date.now();
+    let seq = 0;
     const toImport = (result.funds || [])
       .filter(f => f.matched && selectedCodes[f.scheme_code])
       .map(f => ({
@@ -60,7 +62,15 @@ export default function CASImport({ onClose, onImport }) {
         monthly_sip:       0,
         purchase_date:     f.purchase_date,
         plan_type:         (f.raw_name || '').toLowerCase().includes('regular') ? 'Regular' : 'Direct',
-        transactions:      f.transactions.map(t => ({ date: t.date, amount: t.amount, type: t.type, note: t.note })),
+        transactions:      f.transactions.map(t => ({
+          id:     baseId + (seq++),
+          date:   t.date,
+          amount: t.amount,
+          // Dividend reinvestment adds units like a buy — the backend has no
+          // separate branch for "dividend" and would otherwise silently drop it.
+          type:   t.type === 'dividend' ? 'buy' : t.type,
+          note:   t.note,
+        })),
       }));
     onImport(toImport);
   }

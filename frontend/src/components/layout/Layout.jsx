@@ -1,5 +1,6 @@
 import { Outlet } from 'react-router-dom';
 import Sidebar from './Sidebar';
+import ColdStartBanner from '../ColdStartBanner';
 
 export default function Layout() {
   return (
@@ -8,6 +9,7 @@ export default function Layout() {
       <div className="ambient-blob" style={{ width: 500, height: 500, background: '#c4a035', top: -150, left: -100 }} />
       <div className="ambient-blob" style={{ width: 400, height: 400, background: '#8b7635', top: '50%', right: -120, animationDelay: '-8s' }} />
 
+      <ColdStartBanner />
       <Sidebar />
 
       {/* Main Content — offset by sidebar width */}

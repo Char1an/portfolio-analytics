@@ -457,6 +457,7 @@ body {
 @keyframes slideUp { from { opacity: 0; transform: translateY(18px) } to { opacity: 1; transform: translateY(0) } }
 @keyframes pulseDot { 0%,100% { opacity:1; transform:scale(1) } 50% { opacity:0.45; transform:scale(0.85) } }
 @keyframes spinRing { to { transform: rotate(360deg) } }
+@keyframes fadeInDown { from { opacity: 0; transform: translate(-50%, -8px) } to { opacity: 1; transform: translate(-50%, 0) } }
 
 .animate-spin { animation: spinRing 0.9s linear infinite; }
 

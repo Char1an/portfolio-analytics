@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect, useMemo, useRef } from 'react';
-import { Search, Plus, X, Briefcase, ArrowRight, RotateCcw, Info, ChevronDown, ChevronUp, AlertTriangle, CheckCircle2, Clock, Trash2, Upload } from 'lucide-react';
+import { Search, Plus, X, Briefcase, ArrowRight, RotateCcw, Info, ChevronDown, ChevronUp, AlertTriangle, CheckCircle2, Clock, Trash2, Upload, Pencil, Check } from 'lucide-react';
 import { searchFunds } from '../services/api';
 import { formatCurrency } from '../utils/formatters';
 import { loadPortfolio, savePortfolio, syncPortfolioToServer, DEFAULT_FUNDS } from '../utils/portfolioStore';
@@ -26,6 +26,8 @@ export default function Portfolio() {
   const [flash, setFlash]             = useState(null);
   const [confirmReset, setConfirmReset] = useState(false);
   const [showCASImport, setShowCASImport] = useState(false);
+  const [editingTxn, setEditingTxn]   = useState(null); // { fundCode, txnId, date, amount, type }
+  const [showAllTxns, setShowAllTxns] = useState({});   // fundCode -> bool
   const { hydrated, isLoggedIn }      = useAuth();
   const hasUserEdit                   = useRef(false);
 
@@ -112,6 +114,19 @@ export default function Portfolio() {
         ? { ...f, transactions: (f.transactions || []).filter(t => t.id !== txnId) }
         : f
     ));
+  }
+
+  function saveEditedTransaction() {
+    if (!editingTxn || !editingTxn.amount || Number(editingTxn.amount) <= 0) return;
+    const { fundCode, txnId, date, amount, type } = editingTxn;
+    editPortfolio(prev => prev.map(f =>
+      f.scheme_code === fundCode
+        ? { ...f, transactions: (f.transactions || []).map(t =>
+            t.id === txnId ? { ...t, date, amount: Number(amount), type } : t
+          ) }
+        : f
+    ));
+    setEditingTxn(null);
   }
 
   function resetToDefaults() {
@@ -575,7 +590,13 @@ export default function Portfolio() {
                     )}
 
                     {/* Transaction list */}
-                    {fund.transactions?.length > 0 ? (
+                    {fund.transactions?.length > 0 ? (() => {
+                      const sorted = [...fund.transactions].sort((a, b) => a.date.localeCompare(b.date));
+                      const COLLAPSE_AFTER = 8;
+                      const isExpanded = !!showAllTxns[fund.scheme_code];
+                      const visible = isExpanded ? sorted : sorted.slice(-COLLAPSE_AFTER);
+                      const hiddenCount = sorted.length - visible.length;
+                      return (
                       <div style={{ border: '1px solid var(--border)', borderRadius: 10, overflow: 'hidden' }}>
                         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
                           <thead>
@@ -587,7 +608,54 @@ export default function Portfolio() {
                             </tr>
                           </thead>
                           <tbody>
-                            {[...fund.transactions].sort((a, b) => a.date.localeCompare(b.date)).map((txn) => (
+                            {hiddenCount > 0 && (
+                              <tr>
+                                <td colSpan={4} style={{ padding: '6px 14px', textAlign: 'center' }}>
+                                  <button onClick={() => setShowAllTxns(prev => ({ ...prev, [fund.scheme_code]: true }))}
+                                    style={{ background: 'none', border: 'none', color: 'var(--indigo)', fontSize: 10, fontWeight: 700, cursor: 'pointer' }}>
+                                    Show {hiddenCount} earlier transaction{hiddenCount === 1 ? '' : 's'}
+                                  </button>
+                                </td>
+                              </tr>
+                            )}
+                            {visible.map((txn) => {
+                              const isEditing = editingTxn?.txnId === txn.id && editingTxn?.fundCode === fund.scheme_code;
+                              if (isEditing) {
+                                return (
+                                  <tr key={txn.id} style={{ borderBottom: '1px solid var(--border)', background: 'rgba(99,102,241,0.04)' }}>
+                                    <td style={{ padding: '6px 10px' }}>
+                                      <input type="date" value={editingTxn.date}
+                                        onChange={e => setEditingTxn(prev => ({ ...prev, date: e.target.value }))}
+                                        style={{ width: '100%', padding: '4px 6px', fontSize: 10, borderRadius: 5, border: '1px solid var(--border)', background: 'var(--bg-1)', color: 'var(--text-1)' }} />
+                                    </td>
+                                    <td style={{ padding: '6px 10px' }}>
+                                      <input type="number" value={editingTxn.amount}
+                                        onChange={e => setEditingTxn(prev => ({ ...prev, amount: e.target.value }))}
+                                        style={{ width: '100%', padding: '4px 6px', fontSize: 10, borderRadius: 5, border: '1px solid var(--border)', background: 'var(--bg-1)', color: 'var(--text-1)', textAlign: 'right' }} />
+                                    </td>
+                                    <td style={{ padding: '6px 10px' }}>
+                                      <select value={editingTxn.type}
+                                        onChange={e => setEditingTxn(prev => ({ ...prev, type: e.target.value }))}
+                                        style={{ width: '100%', padding: '4px 6px', fontSize: 10, borderRadius: 5, border: '1px solid var(--border)', background: 'var(--bg-1)', color: 'var(--text-1)' }}>
+                                        <option value="sip">SIP</option>
+                                        <option value="buy">Buy</option>
+                                        <option value="sell">Sell</option>
+                                      </select>
+                                    </td>
+                                    <td style={{ padding: '6px 10px', textAlign: 'center', whiteSpace: 'nowrap' }}>
+                                      <button onClick={saveEditedTransaction}
+                                        style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--green)', padding: 4 }}>
+                                        <Check size={12} />
+                                      </button>
+                                      <button onClick={() => setEditingTxn(null)}
+                                        style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-3)', padding: 4 }}>
+                                        <X size={12} />
+                                      </button>
+                                    </td>
+                                  </tr>
+                                );
+                              }
+                              return (
                               <tr key={txn.id} style={{ borderBottom: '1px solid var(--border)' }}>
                                 <td style={{ padding: '8px 14px', color: 'var(--text-2)', fontFamily: 'monospace' }}>{txn.date}</td>
                                 <td style={{ padding: '8px 14px', textAlign: 'right', fontFamily: 'monospace', fontWeight: 700,
@@ -603,24 +671,38 @@ export default function Portfolio() {
                                     {txn.type === 'sip' ? 'SIP' : txn.type === 'sell' ? 'Sell' : 'Buy'}
                                   </span>
                                 </td>
-                                <td style={{ padding: '8px 14px', textAlign: 'center' }}>
+                                <td style={{ padding: '8px 14px', textAlign: 'center', whiteSpace: 'nowrap' }}>
+                                  <button onClick={() => setEditingTxn({ fundCode: fund.scheme_code, txnId: txn.id, date: txn.date, amount: txn.amount, type: txn.type })}
+                                    style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-3)', padding: 4, borderRadius: 6 }}>
+                                    <Pencil size={11} />
+                                  </button>
                                   <button onClick={() => removeTransaction(fund.scheme_code, txn.id)}
                                     style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-3)', padding: 4, borderRadius: 6 }}>
                                     <Trash2 size={11} />
                                   </button>
                                 </td>
                               </tr>
-                            ))}
+                              );
+                            })}
                           </tbody>
                         </table>
-                        <div style={{ padding: '8px 14px', background: 'rgba(52,211,153,0.04)', display: 'flex', alignItems: 'center', gap: 7 }}>
-                          <CheckCircle2 size={12} style={{ color: 'var(--green)' }} />
-                          <p style={{ fontSize: 10, color: 'var(--green)', fontWeight: 600 }}>
-                            XIRR and portfolio value will be computed from these actual transactions
-                          </p>
+                        <div style={{ padding: '8px 14px', background: 'rgba(52,211,153,0.04)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 7 }}>
+                          <span style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+                            <CheckCircle2 size={12} style={{ color: 'var(--green)' }} />
+                            <p style={{ fontSize: 10, color: 'var(--green)', fontWeight: 600 }}>
+                              XIRR and portfolio value will be computed from these actual transactions
+                            </p>
+                          </span>
+                          {isExpanded && sorted.length > COLLAPSE_AFTER && (
+                            <button onClick={() => setShowAllTxns(prev => ({ ...prev, [fund.scheme_code]: false }))}
+                              style={{ background: 'none', border: 'none', color: 'var(--text-3)', fontSize: 10, fontWeight: 700, cursor: 'pointer' }}>
+                              Collapse
+                            </button>
+                          )}
                         </div>
                       </div>
-                    ) : (
+                      );
+                    })() : (
                       <p style={{ fontSize: 11, color: 'var(--text-3)', fontStyle: 'italic' }}>
                         No transactions logged yet. Without them, XIRR is estimated from the SIP amount and start date above.
                       </p>
