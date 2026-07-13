@@ -384,6 +384,12 @@ export default function Dashboard() {
   const navDateLine = latestNavDate
     ? new Date(latestNavDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
     : null;
+  // NAVs typically update daily on business days (before ~11pm IST). Anything
+  // older than 3 days without a weekend to explain it is worth flagging.
+  const navAgeDays = latestNavDate
+    ? Math.floor((Date.now() - new Date(latestNavDate).getTime()) / 86400000)
+    : null;
+  const navIsStale = navAgeDays != null && navAgeDays > 3;
 
   const ret = summary.absolute_return_pct || 0;
   const isUp = ret >= 0;
@@ -410,7 +416,19 @@ export default function Dashboard() {
         </div>
         <p className="dateline" style={{ marginTop: 4 }}>
           {dateLine} · {user?.username ? `${displayName}'s portfolio` : 'Local portfolio'}
-          {navDateLine && <span style={{ color: 'var(--text-3)', fontStyle: 'normal', fontSize: 11 }}> &nbsp;·&nbsp; NAV as of {navDateLine}</span>}
+          {navDateLine && (
+            <span style={{ color: navIsStale ? '#f59e0b' : 'var(--text-3)', fontStyle: 'normal', fontSize: 11 }}>
+              &nbsp;·&nbsp; NAV as of {navDateLine}
+              {navIsStale && (
+                <span title={`Latest NAV is ${navAgeDays} days old — MFAPI may be lagging`}
+                      style={{ marginLeft: 6, padding: '2px 7px', borderRadius: 99,
+                               background: 'rgba(245,158,11,0.15)', border: '1px solid rgba(245,158,11,0.4)',
+                               color: '#f59e0b', fontWeight: 700, fontSize: 9 }}>
+                  {navAgeDays}d STALE
+                </span>
+              )}
+            </span>
+          )}
         </p>
         <div className="editorial-rule" />
 

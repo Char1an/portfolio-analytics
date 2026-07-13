@@ -19,7 +19,7 @@ Folio Klarity is a full-stack Indian mutual fund analytics platform (React + Fas
 
 **Deploy pipeline:**
 - Backend: **Render** — auto-deploys on every `git push` (Blueprint via `render.yaml`) ✅ WORKING
-- Frontend: **Vercel** — **auto-deploy is NOT yet wired**. `vercel deploy --prod` must be run manually from `frontend/` after each push. See "Open Action Items" below.
+- Frontend: **Vercel** — auto-deploys on every `git push` (GitHub app installed, Root Directory = `frontend/`) ✅ WORKING
 
 **Latest commit:** `3c6b13a — Add SWP Calculator + Fund Comparison pages` (Vercel is at this commit via manual CLI deploy; further pushes will be Render-only until Git integration is completed).
 
@@ -141,7 +141,7 @@ portfolio-analytics/
 |---|---|
 | `VITE_API_URL` | `https://folio-klarity-api.onrender.com/api` |
 
-**IMPORTANT — Git integration NOT connected.** Deploys currently require manual `vercel deploy --prod --yes` from `frontend/`. This is the main open action item — see below.
+**Git integration is connected.** Every `git push` to `main` auto-deploys the frontend in ~20-30s. Root Directory is set to `frontend/` in Vercel project settings, so builds run inside that folder correctly.
 
 ---
 
@@ -152,12 +152,8 @@ portfolio-analytics/
 - **This key should be deleted immediately** if not already: <https://dashboard.render.com/u/settings#api-keys>
 - Chat transcripts can leak — treat any token that appeared in one as compromised.
 
-### 2. Complete Vercel ↔ GitHub connection (fixes auto-deploy gap)
-- Go to <https://vercel.com/char1ans-projects/folio-klarity/settings/git>
-- Click the black **"Install"** button
-- In the GitHub popup: pick `Char1an` → "Only select repositories" → tick `portfolio-analytics` → **Install**
-- Back on Vercel: pick `Char1an` namespace → pick `portfolio-analytics` → **Connect/Save**
-- After this, every `git push` auto-deploys frontend + backend
+### 2. ~~Complete Vercel ↔ GitHub connection~~ ✅ DONE (2026-07-13)
+Auto-deploy is now working — GitHub app installed, Root Directory set to `frontend/`, verified with a test commit.
 
 ### 3. (Optional) Enable AI Agent page
 - Get a free Groq API key at <https://console.groq.com/keys>

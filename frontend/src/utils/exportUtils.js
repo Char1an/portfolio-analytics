@@ -25,6 +25,34 @@ export function exportCSV(rows, headers, filename) {
   downloadBlob(blob, filename);
 }
 
+// ── Portfolio + transactions CSV (one-click "download my data") ──
+export function exportPortfolioCSV(portfolio) {
+  const stamp = new Date().toISOString().slice(0, 10);
+  if (!portfolio || portfolio.length === 0) return;
+
+  const holdingsHeaders = ['scheme_code', 'name', 'category', 'plan_type', 'investment_amount', 'monthly_sip', 'purchase_date', 'transaction_count'];
+  const holdingsRows = portfolio.map(f => [
+    f.scheme_code,
+    f.name || '',
+    f.category || '',
+    f.plan_type || 'Direct',
+    f.investment_amount || 0,
+    f.monthly_sip || 0,
+    f.purchase_date || '',
+    (f.transactions || []).length,
+  ]);
+  exportCSV(holdingsRows, holdingsHeaders, `folio-klarity-holdings-${stamp}.csv`);
+
+  // Only export transactions if any fund has some
+  const allTxns = portfolio.flatMap(f => (f.transactions || []).map(t => [
+    f.scheme_code, f.name || '', t.date, t.type, t.amount, t.note || '',
+  ]));
+  if (allTxns.length > 0) {
+    // Slight delay so the browser doesn't collapse the two downloads into one
+    setTimeout(() => exportCSV(allTxns, ['scheme_code', 'fund_name', 'date', 'type', 'amount', 'note'], `folio-klarity-transactions-${stamp}.csv`), 400);
+  }
+}
+
 // ── Excel (multi-sheet) ────────────────────────────────────────
 // sheets: [{ name, headers, rows }]
 export function exportExcel(sheets, filename) {

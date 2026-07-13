@@ -1,10 +1,11 @@
 import { useState, useCallback, useEffect, useMemo, useRef } from 'react';
-import { Search, Plus, X, Briefcase, ArrowRight, RotateCcw, Info, ChevronDown, ChevronUp, AlertTriangle, CheckCircle2, Clock, Trash2, Upload, Pencil, Check } from 'lucide-react';
+import { Search, Plus, X, Briefcase, ArrowRight, RotateCcw, Info, ChevronDown, ChevronUp, AlertTriangle, CheckCircle2, Clock, Trash2, Upload, Pencil, Check, Download } from 'lucide-react';
 import { searchFunds } from '../services/api';
 import { formatCurrency } from '../utils/formatters';
 import { loadPortfolio, savePortfolio, syncPortfolioToServer, DEFAULT_FUNDS } from '../utils/portfolioStore';
 import { useAuth } from '../contexts/auth';
 import CASImport from '../components/CASImport';
+import { exportPortfolioCSV } from '../utils/exportUtils';
 
 const shortName = (name) => name.replace(/\s*-\s*(Direct|Regular)\s*(Growth|Plan)?\s*/i, '').trim();
 
@@ -231,6 +232,14 @@ export default function Portfolio() {
             <>
               <button onClick={() => setShowCASImport(true)} className="btn-primary" style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12 }}>
                 <Upload size={12} /> Import CAS
+              </button>
+              <button
+                onClick={() => exportPortfolioCSV(portfolio)}
+                disabled={portfolio.length === 0}
+                title="Download portfolio + transactions as CSV"
+                className="btn-secondary"
+                style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, opacity: portfolio.length === 0 ? 0.5 : 1 }}>
+                <Download size={12} /> Export
               </button>
               <button onClick={resetToDefaults} className="btn-secondary" style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12 }}>
                 <RotateCcw size={12} /> Reset
