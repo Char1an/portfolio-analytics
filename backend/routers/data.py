@@ -29,7 +29,7 @@ def list_benchmarks():
 
 
 @router.get("/search")
-def search_funds(q: str = Query(..., min_length=2)):
+def search_funds(q: str = Query(..., min_length=1)):
     results = search_schemes(q)
     return {"query": q, "results": results[:20]}
 

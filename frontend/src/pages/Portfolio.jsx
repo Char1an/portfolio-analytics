@@ -58,7 +58,7 @@ export default function Portfolio() {
   }, []);
 
   const doSearch = useCallback(debounce(async (q) => {
-    if (q.length < 2) { setSearchResults([]); return; }
+    if (q.length < 1) { setSearchResults([]); return; }
     setSearching(true);
     try {
       const r = await searchFunds(q);
