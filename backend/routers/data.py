@@ -30,8 +30,44 @@ def list_benchmarks():
 
 @router.get("/search")
 def search_funds(q: str = Query(..., min_length=1)):
-    results = search_schemes(q)
-    return {"query": q, "results": results[:20]}
+    """
+    Search mutual funds. Combines two sources:
+      1. Local POPULAR_SCHEMES (198 curated) — always searched, returns
+         instantly, and works for single-char queries (MFAPI needs 2+).
+      2. Upstream MFAPI /mf/search — only queried when q has 2+ chars,
+         since MFAPI silently returns [] for shorter queries.
+    Results are merged, with local matches ranked first for single-char
+    queries so users see recognisable names immediately.
+    """
+    q_norm = q.strip().lower()
+
+    # ── Local search over curated schemes ──
+    local_hits = []
+    seen_codes = set()
+    for s in POPULAR_SCHEMES:
+        name_l  = s["name"].lower()
+        house_l = s.get("house", "").lower()
+        # For 1-char queries, use word-start matching so "a" surfaces "Axis..."
+        # not funds where "a" happens to appear mid-word (which is every fund).
+        if len(q_norm) == 1:
+            hit = any(w.startswith(q_norm) for w in name_l.split() + house_l.split())
+        else:
+            hit = q_norm in name_l or q_norm in house_l
+        if hit:
+            local_hits.append({"schemeCode": s["code"], "schemeName": s["name"]})
+            seen_codes.add(s["code"])
+
+    # ── Upstream MFAPI (only if long enough — it 400s / [] otherwise) ──
+    remote_hits = []
+    if len(q_norm) >= 2:
+        for r in search_schemes(q):
+            code = str(r.get("schemeCode") or r.get("scheme_code") or "")
+            if code and code not in seen_codes:
+                remote_hits.append(r)
+                seen_codes.add(code)
+
+    merged = local_hits + remote_hits
+    return {"query": q, "results": merged[:20]}
 
 
 @router.get("/nav/{scheme_code}")
