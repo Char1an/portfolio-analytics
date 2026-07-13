@@ -42,20 +42,28 @@ def search_funds(q: str = Query(..., min_length=1)):
     q_norm = q.strip().lower()
 
     # ── Local search over curated schemes ──
-    local_hits = []
+    # Substring match — a single char matches any fund whose name/house
+    # contains that character anywhere. Digits work too (e.g. "2" surfaces
+    # Nifty 250 funds). Hits where the query starts a word or the name
+    # itself rank higher so obvious matches (HDFC for "h") lead.
+    scored = []
     seen_codes = set()
     for s in POPULAR_SCHEMES:
         name_l  = s["name"].lower()
         house_l = s.get("house", "").lower()
-        # For 1-char queries, use word-start matching so "a" surfaces "Axis..."
-        # not funds where "a" happens to appear mid-word (which is every fund).
-        if len(q_norm) == 1:
-            hit = any(w.startswith(q_norm) for w in name_l.split() + house_l.split())
+        if q_norm not in name_l and q_norm not in house_l:
+            continue
+        # Ranking score — higher is better
+        if name_l.startswith(q_norm) or house_l.startswith(q_norm):
+            score = 3
+        elif any(w.startswith(q_norm) for w in name_l.split() + house_l.split()):
+            score = 2
         else:
-            hit = q_norm in name_l or q_norm in house_l
-        if hit:
-            local_hits.append({"schemeCode": s["code"], "schemeName": s["name"]})
-            seen_codes.add(s["code"])
+            score = 1  # mid-word substring match
+        scored.append((score, s))
+        seen_codes.add(s["code"])
+    scored.sort(key=lambda t: -t[0])
+    local_hits = [{"schemeCode": s["code"], "schemeName": s["name"]} for _, s in scored]
 
     # ── Upstream MFAPI (only if long enough — it 400s / [] otherwise) ──
     remote_hits = []
