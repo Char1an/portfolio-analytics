@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider } from './contexts/AuthContext';
 import Layout from './components/layout/Layout';
 import Login from './pages/Login';
@@ -45,6 +45,8 @@ export default function App() {
             <Route path="/regime"            element={<RegimeAnalysis />} />
             <Route path="/overlap"           element={<Overlap />} />
             <Route path="/factor-attribution" element={<FactorAttribution />} />
+            {/* Any unknown path (incl. old /agent bookmarks) lands on the Dashboard */}
+            <Route path="*" element={<Navigate to="/" replace />} />
           </Route>
         </Routes>
       </BrowserRouter>
