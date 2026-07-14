@@ -51,7 +51,7 @@ export default function Layout() {
                 {' · '}
                 <a href="https://folio-klarity-api.onrender.com/docs" target="_blank" rel="noreferrer" style={{ color: '#8b7635' }}>API</a>
               </p>
-              <p style={{ marginTop: 3 }}>Not affiliated with any AMC, Groww, or Zerodha.</p>
+              <p style={{ marginTop: 3 }}>Not affiliated with any AMC.</p>
             </div>
           </div>
         </footer>

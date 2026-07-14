@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import {
   TrendingUp, TrendingDown, IndianRupee, Shield,
   BarChart3, Zap, RefreshCw, ArrowUpRight, ArrowDownRight, Briefcase,
-  Sparkles, Settings2, GitCompare, Banknote, Brain, Flame, Activity, Layers, Bot, Play, Code2, Award,
+  Sparkles, Settings2, GitCompare, Banknote, Brain, Flame, Activity, Layers, Clock, Play, Code2, Award,
 } from 'lucide-react';
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip,
@@ -75,7 +75,7 @@ const FEATURES = [
   { icon: Flame,       title: 'Monte Carlo Simulation', desc: 'GBM stochastic paths, 1000 runs',      color: '#f59e0b' },
   { icon: Activity,    title: 'Regime Detection',       desc: 'GMM-based Bull/Bear/Sideways states',  color: '#ec4899' },
   { icon: Layers,      title: 'Portfolio Overlap',      desc: 'Pearson correlation on NAV returns',   color: '#f472b6' },
-  { icon: Bot,         title: 'AI Agent',               desc: 'Llama 3.3 70B via Groq, tool-calling', color: '#818cf8' },
+  { icon: Clock,       title: 'Time Machine',           desc: 'Replay portfolio value on any past date', color: '#818cf8' },
 ];
 
 function LandingHero({ onTryDemo, onExplore }) {

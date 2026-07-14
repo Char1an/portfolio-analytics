@@ -14,7 +14,6 @@ import FundBrowser from './pages/FundBrowser';
 import RegimeAnalysis from './pages/RegimeAnalysis';
 import Overlap from './pages/Overlap';
 import FactorAttribution from './pages/FactorAttribution';
-import Agent from './pages/Agent';
 import SWP from './pages/SWP';
 import FundCompare from './pages/FundCompare';
 import RebalanceSimulator from './pages/RebalanceSimulator';
@@ -46,7 +45,6 @@ export default function App() {
             <Route path="/regime"            element={<RegimeAnalysis />} />
             <Route path="/overlap"           element={<Overlap />} />
             <Route path="/factor-attribution" element={<FactorAttribution />} />
-            <Route path="/agent"             element={<Agent />} />
           </Route>
         </Routes>
       </BrowserRouter>

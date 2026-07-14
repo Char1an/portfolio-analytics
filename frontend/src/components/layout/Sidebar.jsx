@@ -2,7 +2,7 @@ import { NavLink, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard, Briefcase, BarChart3, Brain, Flame,
   Settings2, TrendingUp, Target, Receipt, Search,
-  LogIn, LogOut, User, Activity, Layers, FlaskConical, Bot,
+  LogIn, LogOut, User, Activity, Layers, FlaskConical,
   Banknote, GitCompare, Sliders, Clock,
 } from 'lucide-react';
 import { useAuth } from '../../contexts/auth';
@@ -42,12 +42,6 @@ const NAV_GROUPS = [
       { to: '/regime',             icon: Activity,      label: 'Regime Analysis' },
       { to: '/overlap',            icon: Layers,        label: 'Portfolio Overlap' },
       { to: '/factor-attribution', icon: FlaskConical,  label: 'Factor Attribution' },
-    ],
-  },
-  {
-    label: 'AI',
-    items: [
-      { to: '/agent', icon: Bot, label: 'AI Agent' },
     ],
   },
 ];
