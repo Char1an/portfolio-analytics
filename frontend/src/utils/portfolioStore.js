@@ -20,12 +20,12 @@ export const DEFAULT_FUNDS = [
     plan_type: 'Direct',
   },
   {
-    scheme_code: '149934',
+    scheme_code: '127042',
     name: 'Motilal Oswal Midcap Fund - Direct Growth',
     category: 'Mid Cap',
     monthly_sip: 5000,
     investment_amount: 5000,
-    purchase_date: '2023-01-01',
+    purchase_date: '2023-08-01',
     plan_type: 'Direct',
   },
 ];
