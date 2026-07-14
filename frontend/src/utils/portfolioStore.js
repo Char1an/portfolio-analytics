@@ -30,12 +30,40 @@ export const DEFAULT_FUNDS = [
   },
 ];
 
+// One-time migrations for portfolios stored in localStorage by older builds.
+// Each entry: predicate → replacement. Runs silently on every loadPortfolio()
+// so users on stale data don't have to hit Reset manually.
+const SCHEME_MIGRATIONS = {
+  // '149934' was mislabeled as Motilal Oswal Midcap in an earlier demo
+  // portfolio; it's actually HDFC FMP 1162D (a debt FMP that matured
+  // May 2025). Replace it with the real Motilal Oswal Midcap scheme.
+  '149934': { scheme_code: '127042', name: 'Motilal Oswal Midcap Fund - Direct Growth', category: 'Mid Cap' },
+};
+
+function migratePortfolio(funds) {
+  let changed = false;
+  const migrated = funds.map(f => {
+    const patch = SCHEME_MIGRATIONS[f.scheme_code];
+    if (!patch) return f;
+    changed = true;
+    return { ...f, ...patch };
+  });
+  return { funds: migrated, changed };
+}
+
 export function loadPortfolio() {
   try {
     const saved = localStorage.getItem(STORAGE_KEY);
     if (saved) {
       const parsed = JSON.parse(saved);
-      if (Array.isArray(parsed)) return parsed;
+      if (Array.isArray(parsed)) {
+        const { funds, changed } = migratePortfolio(parsed);
+        // Persist migrated version so the migration only runs once.
+        if (changed) {
+          try { localStorage.setItem(STORAGE_KEY, JSON.stringify(funds)); } catch {}
+        }
+        return funds;
+      }
     }
   } catch {
     // Ignore storage/JSON errors and fall back to an empty portfolio.
