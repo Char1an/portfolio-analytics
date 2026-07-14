@@ -297,17 +297,37 @@ export default function Dashboard() {
       const navFetches = funds.map(f => getNavHistory(f.scheme_code, '3Y').catch(() => null));
       const navResps = await Promise.all(navFetches);
 
+      // Only keep funds that returned NAV data
+      const valid = navResps
+        .map((resp, i) => ({ resp, fund: funds[i] }))
+        .filter(x => x.resp?.data?.nav_data?.length);
+
+      // Common window: max of all funds' first dates → min of all funds' last dates.
+      // Without this, funds with shorter history get straight-line-interpolated
+      // by connectNulls, producing a fake smooth chart that hides all volatility.
+      const commonStart = valid.reduce((max, x) => {
+        const d = x.resp.data.nav_data[0].date;
+        return d > max ? d : max;
+      }, '0000-00-00');
+      const commonEnd = valid.reduce((min, x) => {
+        const arr = x.resp.data.nav_data;
+        const d = arr[arr.length - 1].date;
+        return d < min ? d : min;
+      }, '9999-99-99');
+
       const allDates = {};
       const lines = [];
-      navResps.forEach((resp, i) => {
-        if (!resp?.data?.nav_data?.length) return;
-        const pts = resp.data.nav_data;
-        const base = pts[0]?.nav || 1;
-        const step = Math.max(1, Math.floor(pts.length / 100));
-        const label = shortName(funds[i]?.name || funds[i]?.scheme_code || '');
-        lines.push({ key: label, color: CHART_COLORS[i % CHART_COLORS.length], code: funds[i].scheme_code });
-        pts.forEach((p, j) => {
-          if (j % step !== 0 && j !== pts.length - 1) return;
+      valid.forEach((x, i) => {
+        // Slice to common window
+        const windowed = x.resp.data.nav_data.filter(p => p.date >= commonStart && p.date <= commonEnd);
+        if (windowed.length < 2) return;
+
+        const base = windowed[0].nav || 1;
+        const step = Math.max(1, Math.floor(windowed.length / 100));
+        const label = shortName(x.fund?.name || x.fund?.scheme_code || '');
+        lines.push({ key: label, color: CHART_COLORS[i % CHART_COLORS.length], code: x.fund.scheme_code });
+        windowed.forEach((p, j) => {
+          if (j % step !== 0 && j !== windowed.length - 1) return;
           if (!allDates[p.date]) allDates[p.date] = { date: p.date };
           allDates[p.date][label] = parseFloat(((p.nav / base) * 100).toFixed(2));
         });
@@ -484,8 +504,10 @@ export default function Dashboard() {
         <div className="glass-card col-span-2" style={{ padding: 22 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 14, flexWrap: 'wrap', gap: 8 }}>
             <div>
-              <h3 style={{ fontSize: 13, fontWeight: 700 }}>3-Year Normalized Growth</h3>
-              <p style={{ fontSize: 11, color: 'var(--text-3)', marginTop: 2 }}>Base = ₹100 at start · all portfolio funds compared</p>
+              <h3 style={{ fontSize: 13, fontWeight: 700 }}>Normalized Growth</h3>
+              <p style={{ fontSize: 11, color: 'var(--text-3)', marginTop: 2 }}>
+                Base = ₹100 · trimmed to the window where all funds have NAV data (fair comparison)
+              </p>
             </div>
             {/* Fund selector pills */}
             {navChartLines.length > 1 && (
