@@ -107,16 +107,40 @@ def _clean_amount(s: str) -> float:
         return 0.0
 
 
-def _classify_txn(narration: str) -> str:
-    """Classify the transaction type from its narration text."""
+def _classify_txn(narration: str, amount: float, units: float) -> str:
+    """
+    Classify the transaction type. Returns one of:
+      'buy', 'sell', 'dividend_reinvest', 'fee', 'skip'
+
+    Callers decide what to do with each — fees/skips are excluded from the
+    portfolio total; dividend reinvestments add units without touching the
+    invested-capital denominator.
+    """
     n = narration.lower()
-    if any(k in n for k in ("purchase", "sip", "subscription", "invest", "switch in", "switch-in", "systematic")):
-        return "buy"
-    if any(k in n for k in ("redemption", "sell", "switch out", "switch-out", "withdrawal")):
+
+    # Fees: stamp duty, exit load, TER, tax deducted at source
+    if any(k in n for k in ("stamp duty", "stamp-duty", "exit load", "tds", "tax deducted", "expense ratio")):
+        return "fee"
+
+    # Reversal / rejection — even if narration says 'purchase', a negative
+    # amount or negative units means it's unwinding a previous transaction
+    if "reversal" in n or "reject" in n or amount < 0 or units < 0:
+        return "sell" if units > 0 or amount > 0 else "buy"  # reverses whichever direction the original was
+
+    # Dividend reinvestment — cash-neutral (dividend paid out then re-invested)
+    if ("dividend" in n and ("reinvest" in n or "re-invest" in n)) or "distribution" in n:
+        return "dividend_reinvest"
+
+    # Actual redemption / switch out
+    if any(k in n for k in ("redemption", "redeem", "sell", "switch out", "switch-out", "withdrawal")):
         return "sell"
-    if any(k in n for k in ("dividend", "reinvest", "distribution")):
-        return "dividend"
-    return "buy"  # default
+
+    # Actual purchase
+    if any(k in n for k in ("purchase", "sip", "subscription", "invest", "switch in", "switch-in", "systematic", "additional")):
+        return "buy"
+
+    # Unclassifiable — skip rather than pretend it's a buy
+    return "skip"
 
 
 def parse_cas(pdf_bytes: bytes, password: Optional[str] = None) -> Dict:
@@ -154,12 +178,17 @@ def parse_cas(pdf_bytes: bytes, password: Optional[str] = None) -> Dict:
             # Skip lines that look like account balance / opening balance summaries
             if any(k in narration.lower() for k in ("opening balance", "closing balance", "b/f", "c/f")):
                 continue
+            amt   = _clean_amount(m.group("amount"))
+            units = _clean_amount(m.group("units"))
+            ttype = _classify_txn(narration, amt, units)
+            if ttype == "skip":
+                continue
             txn = {
                 "date":   _normalize_date(m.group("date")),
-                "type":   _classify_txn(narration),
-                "amount": _clean_amount(m.group("amount")),
+                "type":   ttype,
+                "amount": abs(amt),   # store magnitude; type carries direction
                 "nav":    _clean_amount(m.group("nav")),
-                "units":  _clean_amount(m.group("units")),
+                "units":  abs(units),
                 "note":   narration[:60],
             }
             current_fund["transactions"].append(txn)
@@ -201,11 +230,19 @@ def parse_cas(pdf_bytes: bytes, password: Optional[str] = None) -> Dict:
                 current_fund = new_fund
 
     # Aggregate per-fund totals
+    # Note: dividend_reinvest adds units but NOT invested capital (cash-neutral).
+    # 'fee' rows are already filtered by _classify_txn returning 'skip' or 'fee'.
     for f in funds:
-        total_invested = sum(t["amount"] for t in f["transactions"] if t["type"] == "buy")
-        total_redeemed = sum(t["amount"] for t in f["transactions"] if t["type"] == "sell")
-        units          = sum(t["units"]  for t in f["transactions"] if t["type"] == "buy") - \
-                         sum(t["units"]  for t in f["transactions"] if t["type"] == "sell")
+        # Fee rows shouldn't count as invested capital either — drop before aggregating
+        f["transactions"] = [t for t in f["transactions"] if t["type"] != "fee"]
+        buys    = [t for t in f["transactions"] if t["type"] == "buy"]
+        sells   = [t for t in f["transactions"] if t["type"] == "sell"]
+        divrei  = [t for t in f["transactions"] if t["type"] == "dividend_reinvest"]
+        total_invested = sum(t["amount"] for t in buys)
+        total_redeemed = sum(t["amount"] for t in sells)
+        units          = sum(t["units"] for t in buys) \
+                       + sum(t["units"] for t in divrei) \
+                       - sum(t["units"] for t in sells)
         f["total_invested"] = round(total_invested - total_redeemed, 2)
         f["current_units"]  = round(units, 4)
         # First transaction date = purchase_date

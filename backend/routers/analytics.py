@@ -697,33 +697,57 @@ def historical_snapshot(req: HistoricalSnapshotRequest):
         if active.empty:
             continue
 
-        # Compute units accumulated: lumpsum on purchase_dt + monthly SIP up to target
+        # Build the SIP schedule once, then evaluate units-held at each historical
+        # sample date by summing only the SIPs whose date <= that sample date.
         first_nav = float(active.iloc[0]["nav"])
         target_nav = float(active.iloc[-1]["nav"])
 
-        units_lumpsum = (f.investment_amount or 0) / first_nav if first_nav > 0 else 0
-        invested_this = f.investment_amount or 0
+        # Each entry: (event_date, units_added, invested_added)
+        events: List = []
+        if f.investment_amount and first_nav > 0:
+            events.append((purchase_dt, (f.investment_amount / first_nav), float(f.investment_amount)))
 
-        # SIP on the 1st of every month between purchase_dt and target
         if f.monthly_sip and f.monthly_sip > 0:
             month_starts = pd.date_range(start=purchase_dt.replace(day=1), end=target, freq="MS")
             for m in month_starts:
                 if m < purchase_dt: continue
-                # Find NAV on-or-after that month-start
                 after = active[active["date"] >= m]
                 if after.empty: continue
                 nav_at = float(after.iloc[0]["nav"])
-                units_lumpsum += f.monthly_sip / nav_at
-                invested_this += f.monthly_sip
+                sip_dt = after.iloc[0]["date"]
+                events.append((sip_dt, f.monthly_sip / nav_at, float(f.monthly_sip)))
 
-        current_val = units_lumpsum * target_nav
+        events.sort(key=lambda e: e[0])
+        total_units    = sum(u for _, u, _ in events)
+        invested_this  = sum(a for _, _, a in events)
+        current_val    = total_units * target_nav
 
-        # Portfolio curve — sample this fund's value at ~30 points from purchase to target
-        step = max(1, len(active) // 30)
+        # Portfolio curve — at each sampled historical date, compute units-held
+        # by summing only the SIP events with event_date <= sample_date.
+        step = max(1, len(active) // 60)
+        event_dates  = [e[0] for e in events]
+        event_units  = [e[1] for e in events]
+        # Cumulative units running total, aligned to events
+        cum_units = []
+        running = 0.0
+        for u in event_units:
+            running += u
+            cum_units.append(running)
+
         for i in range(0, len(active), step):
             row = active.iloc[i]
-            date_str = str(row["date"].date())
-            portfolio_curve[date_str] = portfolio_curve.get(date_str, 0) + units_lumpsum * float(row["nav"]) * (i + 1) / len(active)
+            row_date = row["date"]
+            # Binary-search-friendly: how many events happened by row_date?
+            idx = 0
+            for j, ed in enumerate(event_dates):
+                if ed <= row_date:
+                    idx = j + 1
+                else:
+                    break
+            units_at = cum_units[idx - 1] if idx > 0 else 0.0
+            if units_at == 0: continue
+            date_str = str(row_date.date())
+            portfolio_curve[date_str] = portfolio_curve.get(date_str, 0) + units_at * float(row["nav"])
 
         fund_snapshots.append({
             "scheme_code":   f.scheme_code,

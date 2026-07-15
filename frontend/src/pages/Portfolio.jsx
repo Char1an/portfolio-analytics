@@ -236,7 +236,7 @@ export default function Portfolio() {
               <button
                 onClick={() => exportPortfolioCSV(portfolio)}
                 disabled={portfolio.length === 0}
-                title="Download portfolio + transactions as CSV"
+                title="Download portfolio + transactions as XLSX"
                 className="btn-secondary"
                 style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, opacity: portfolio.length === 0 ? 0.5 : 1 }}>
                 <Download size={12} /> Export

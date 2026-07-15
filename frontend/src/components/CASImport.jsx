@@ -62,15 +62,20 @@ export default function CASImport({ onClose, onImport }) {
         monthly_sip:       0,
         purchase_date:     f.purchase_date,
         plan_type:         (f.raw_name || '').toLowerCase().includes('regular') ? 'Regular' : 'Direct',
-        transactions:      f.transactions.map(t => ({
-          id:     baseId + (seq++),
-          date:   t.date,
-          amount: t.amount,
-          // Dividend reinvestment adds units like a buy — the backend has no
-          // separate branch for "dividend" and would otherwise silently drop it.
-          type:   t.type === 'dividend' ? 'buy' : t.type,
-          note:   t.note,
-        })),
+        // Backend simulate_with_transactions only understands buy/sip/sell.
+        // Dividend reinvestment adds units at zero cash cost — sending it as
+        // a 'buy' would double-count invested capital. Safest: exclude it so
+        // XIRR uses only real cash flows. Users see it in the transaction table
+        // as informational but it doesn't affect returns math.
+        transactions:      f.transactions
+          .filter(t => t.type === 'buy' || t.type === 'sell')
+          .map(t => ({
+            id:     baseId + (seq++),
+            date:   t.date,
+            amount: t.amount,
+            type:   t.type,
+            note:   t.note,
+          })),
       }));
     onImport(toImport);
   }

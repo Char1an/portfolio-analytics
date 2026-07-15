@@ -40,11 +40,22 @@ export default function RebalanceSimulator() {
   const debouncedWeights = useDebounced(weights, 500);
   const lastKeyRef = useRef('');
 
-  // Reset weights when portfolio changes
+  // Reset weights ONLY when the portfolio's COMPOSITION changes
+  // (funds added/removed), not on every portfolio-updated event —
+  // which fires from hydration, other tabs, etc. and would silently
+  // wipe the user's in-progress slider edits and lock toggles.
+  const compositionKey = useMemo(
+    () => portfolio.map(f => f.scheme_code).sort().join(','),
+    [portfolio]
+  );
+  const lastCompositionRef = useRef(compositionKey);
   useEffect(() => {
-    setWeights(initialWeights);
-    setLocked({});
-  }, [initialWeights]);
+    if (compositionKey !== lastCompositionRef.current) {
+      lastCompositionRef.current = compositionKey;
+      setWeights(initialWeights);
+      setLocked({});
+    }
+  }, [compositionKey, initialWeights]);
 
   // Compute total portfolio value (invested + annualised SIP)
   const totalValue = useMemo(() => {

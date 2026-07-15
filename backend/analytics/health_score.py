@@ -128,12 +128,19 @@ def calculate_health_score(funds: List[Dict], nav_dict: Dict[str, pd.DataFrame],
         recs.append("Your risk-adjusted return (Sharpe) is low. Consider consolidating into higher-quality funds.")
 
     # ── 5. Tax efficiency ────────────────────────────────────────────────
-    total_amt = sum((f.get("investment_amount", 0) or 0) for f in funds) or 1
+    # Effective contribution per fund = lumpsum + one year's worth of SIP.
+    # Without the SIP term, a pure-SIP investor gets amt=0 for every fund,
+    # ltcg_pct=0/1=0, and score is stuck at the 30-point floor with the
+    # wrong "consider LTCG timing" recommendation.
+    def _fund_amt(f):
+        return (f.get("investment_amount", 0) or 0) + (f.get("monthly_sip", 0) or 0) * 12
+
+    total_amt = sum(_fund_amt(f) for f in funds) or 1
     ltcg_amt = 0
     stcg_amt = 0
     unknown_amt = 0
     for f in funds:
-        amt = f.get("investment_amount", 0) or 0
+        amt = _fund_amt(f)
         yrs = _holding_years(f.get("purchase_date"))
         if yrs >= 1: ltcg_amt += amt
         elif yrs > 0: stcg_amt += amt
