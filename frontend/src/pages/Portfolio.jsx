@@ -251,16 +251,55 @@ export default function Portfolio() {
 
       {showCASImport && (
         <CASImport
+          existingPortfolio={portfolio}
           onClose={() => setShowCASImport(false)}
           onImport={(newFunds) => {
-            // Merge with existing portfolio, keeping any funds not being re-imported
+            // Smart-merge instead of silent overwrite. For each incoming fund:
+            //   - If no existing entry with same scheme_code → add as new.
+            //   - If collision → merge fields (prefer non-empty existing values
+            //     so user customizations aren't lost) and dedupe transactions
+            //     by date+amount+type so re-imports don't duplicate rows.
+            let addedCount = 0, mergedCount = 0;
             editPortfolio(prev => {
-              const existingCodes = new Set(newFunds.map(f => f.scheme_code));
-              const kept = prev.filter(f => !existingCodes.has(f.scheme_code));
-              return [...kept, ...newFunds];
+              const byCode = new Map(prev.map(f => [f.scheme_code, f]));
+              newFunds.forEach(incoming => {
+                const existing = byCode.get(incoming.scheme_code);
+                if (!existing) {
+                  byCode.set(incoming.scheme_code, incoming);
+                  addedCount++;
+                  return;
+                }
+                // Collision — merge conservatively
+                const existingTxns = existing.transactions || [];
+                const incomingTxns = incoming.transactions || [];
+                const seen = new Set(existingTxns.map(t => `${t.date}|${t.amount}|${t.type}`));
+                const mergedTxns = [...existingTxns];
+                incomingTxns.forEach(t => {
+                  const key = `${t.date}|${t.amount}|${t.type}`;
+                  if (!seen.has(key)) { mergedTxns.push(t); seen.add(key); }
+                });
+                byCode.set(incoming.scheme_code, {
+                  ...incoming,
+                  // Keep existing customizations where they exist
+                  name:              existing.name || incoming.name,
+                  monthly_sip:       existing.monthly_sip || 0,
+                  purchase_date:     existing.purchase_date || incoming.purchase_date,
+                  plan_type:         existing.plan_type || incoming.plan_type,
+                  // Take the larger of the two invested amounts (CAS is
+                  // usually the authoritative source but respect a user
+                  // who intentionally set a higher figure)
+                  investment_amount: Math.max(existing.investment_amount || 0, incoming.investment_amount || 0),
+                  transactions:      mergedTxns,
+                });
+                mergedCount++;
+              });
+              return Array.from(byCode.values());
             });
             setShowCASImport(false);
-            setFlash({ type: 'success', msg: `Imported ${newFunds.length} fund${newFunds.length === 1 ? '' : 's'} from CAS statement.` });
+            const parts = [];
+            if (addedCount)  parts.push(`${addedCount} new fund${addedCount === 1 ? '' : 's'} added`);
+            if (mergedCount) parts.push(`${mergedCount} existing fund${mergedCount === 1 ? '' : 's'} updated (transactions merged, your SIP/name kept)`);
+            setFlash({ type: 'success', msg: parts.join(' · ') || 'No changes applied.' });
           }}
         />
       )}

@@ -9,7 +9,11 @@ import { formatCurrency } from '../utils/formatters';
 
 const API_BASE = (import.meta.env.VITE_API_URL || '/api').replace(/\/$/, '');
 
-export default function CASImport({ onClose, onImport }) {
+export default function CASImport({ onClose, onImport, existingPortfolio = [] }) {
+  // Set of scheme codes already in the user's portfolio — used to show
+  // "will merge with existing" badges in the preview instead of silently
+  // overwriting on import.
+  const existingCodes = new Set(existingPortfolio.map(f => f.scheme_code));
   const [file, setFile]           = useState(null);
   const [password, setPassword]   = useState('');
   const [loading, setLoading]     = useState(false);
@@ -212,23 +216,34 @@ export default function CASImport({ onClose, onImport }) {
                     Matched funds ({matched.length}) — uncheck to skip
                   </p>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 16 }}>
-                    {matched.map(f => (
+                    {matched.map(f => {
+                      const collides = existingCodes.has(f.scheme_code);
+                      return (
                       <label key={f.scheme_code} style={{
                         display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px',
-                        background: selectedCodes[f.scheme_code] ? 'rgba(34,197,94,0.06)' : 'rgba(255,255,255,0.02)',
-                        border: `1px solid ${selectedCodes[f.scheme_code] ? 'rgba(34,197,94,0.25)' : 'var(--border)'}`,
+                        background: selectedCodes[f.scheme_code] ? (collides ? 'rgba(245,158,11,0.06)' : 'rgba(34,197,94,0.06)') : 'rgba(255,255,255,0.02)',
+                        border: `1px solid ${selectedCodes[f.scheme_code] ? (collides ? 'rgba(245,158,11,0.35)' : 'rgba(34,197,94,0.25)') : 'var(--border)'}`,
                         borderRadius: 8, cursor: 'pointer',
                       }}>
                         <input type="checkbox" checked={!!selectedCodes[f.scheme_code]}
                           onChange={e => setSelectedCodes(prev => ({ ...prev, [f.scheme_code]: e.target.checked }))}
-                          style={{ accentColor: 'var(--green)' }} />
+                          style={{ accentColor: collides ? '#f59e0b' : 'var(--green)' }} />
                         <div style={{ flex: 1, minWidth: 0 }}>
-                          <p style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-1)' }}>{f.matched_name}</p>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                            <p style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-1)' }}>{f.matched_name}</p>
+                            {collides && (
+                              <span title="Fund already in your portfolio — transactions will be merged (deduped) and your SIP/name will be preserved"
+                                    style={{ padding: '2px 7px', borderRadius: 99, background: 'rgba(245,158,11,0.15)', border: '1px solid rgba(245,158,11,0.4)', color: '#f59e0b', fontWeight: 700, fontSize: 9, letterSpacing: '0.04em', textTransform: 'uppercase' }}>
+                                Will merge
+                              </span>
+                            )}
+                          </div>
                           <p style={{ fontSize: 10, color: 'var(--text-3)' }}>{f.category} · {f.transactions.length} txns · Since {f.purchase_date}</p>
                         </div>
-                        <p style={{ fontSize: 12, fontWeight: 700, fontFamily: 'monospace', color: 'var(--green)' }}>{formatCurrency(f.total_invested)}</p>
+                        <p style={{ fontSize: 12, fontWeight: 700, fontFamily: 'monospace', color: collides ? '#f59e0b' : 'var(--green)' }}>{formatCurrency(f.total_invested)}</p>
                       </label>
-                    ))}
+                      );
+                    })}
                   </div>
                 </>
               )}
@@ -256,7 +271,10 @@ export default function CASImport({ onClose, onImport }) {
         {/* Footer */}
         <div style={{ padding: '14px 22px', borderTop: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <p style={{ fontSize: 10, color: 'var(--text-3)' }}>
-            {result ? `${selectedCount} of ${matched.length} funds selected` : 'Beta — parser handles most CAMS/KFin formats'}
+            {result ? (() => {
+              const collidingCount = matched.filter(f => selectedCodes[f.scheme_code] && existingCodes.has(f.scheme_code)).length;
+              return `${selectedCount} of ${matched.length} selected${collidingCount > 0 ? ` · ${collidingCount} will merge with existing` : ''}`;
+            })() : 'Beta — parser handles most CAMS/KFin formats'}
           </p>
           <div style={{ display: 'flex', gap: 8 }}>
             <button onClick={onClose} className="btn-secondary" style={{ fontSize: 12 }}>Cancel</button>
