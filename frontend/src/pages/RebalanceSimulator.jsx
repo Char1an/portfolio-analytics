@@ -62,23 +62,41 @@ export default function RebalanceSimulator() {
     return portfolio.reduce((s, f) => s + ((f.investment_amount || 0) + (f.monthly_sip || 0) * 12), 0);
   }, [portfolio]);
 
-  // Handle slider change — redistribute the delta to unlocked funds
+  // Handle slider change — proportionally scale the unlocked "others" so
+  // they fill exactly (100 − new_weight − locked_total). This is the
+  // invariant-preserving version of the old subtract-with-clamp logic,
+  // which lost weight to clamping and produced sums != 100.
   function updateWeight(code, newVal) {
     setWeights(prev => {
-      const clamped = Math.max(0, Math.min(100, newVal));
-      const delta = clamped - (prev[code] || 0);
-      if (Math.abs(delta) < 0.01) return prev;
+      // Locked funds are pinned — the moving slider has to fit alongside them
+      const lockedTotal = portfolio
+        .filter(f => f.scheme_code !== code && locked[f.scheme_code])
+        .reduce((s, f) => s + (prev[f.scheme_code] || 0), 0);
 
-      // Redistribute -delta across unlocked, non-target funds proportionally
+      // The moving slider is bounded by [0, 100 − lockedTotal]. Trying to
+      // push past that would break the invariant with the locked funds.
+      const maxAllowed = Math.max(0, 100 - lockedTotal);
+      const clamped = Math.max(0, Math.min(maxAllowed, newVal));
+      if (Math.abs(clamped - (prev[code] || 0)) < 0.01) return prev;
+
       const others = portfolio.filter(f => f.scheme_code !== code && !locked[f.scheme_code]);
-      const othersTotal = others.reduce((s, f) => s + (prev[f.scheme_code] || 0), 0);
+      if (others.length === 0) return prev; // nothing to redistribute to — reject the move
+
+      const othersTarget = Math.max(0, 100 - clamped - lockedTotal);
+      const othersCurrent = others.reduce((s, f) => s + (prev[f.scheme_code] || 0), 0);
 
       const next = { ...prev, [code]: clamped };
-      if (othersTotal > 0 && others.length > 0) {
+      if (othersCurrent > 0.01) {
+        // Scale proportionally so relative weights among 'others' stay intact
+        const scale = othersTarget / othersCurrent;
         others.forEach(f => {
-          const share = (prev[f.scheme_code] || 0) / othersTotal;
-          next[f.scheme_code] = Math.max(0, (prev[f.scheme_code] || 0) - delta * share);
+          const scaled = (prev[f.scheme_code] || 0) * scale;
+          next[f.scheme_code] = Math.max(0, Math.min(100, scaled));
         });
+      } else {
+        // All others sit at 0 already — distribute the leftover equally
+        const each = othersTarget / others.length;
+        others.forEach(f => { next[f.scheme_code] = each; });
       }
       return next;
     });

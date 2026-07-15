@@ -672,8 +672,13 @@ def historical_snapshot(req: HistoricalSnapshotRequest):
     fund_snapshots = []
     total_invested = 0.0
     total_value    = 0.0
-    max_ever_value = 0.0   # for drawdown calc
-    portfolio_curve = {}  # date -> total portfolio value across all funds
+
+    # Collect per-fund state; the portfolio curve is built AFTER the loop
+    # on a shared date grid so every fund contributes to every point.
+    # (Previously each fund sampled at its own step = len(active)//60, so
+    # per-fund sample dates almost never aligned, causing artificial dips
+    # where only 1-of-N funds contributed to a given date.)
+    fund_states: List[Dict] = []
 
     for f in req.funds:
         df = fetch_nav_history(f.scheme_code)
@@ -697,12 +702,10 @@ def historical_snapshot(req: HistoricalSnapshotRequest):
         if active.empty:
             continue
 
-        # Build the SIP schedule once, then evaluate units-held at each historical
-        # sample date by summing only the SIPs whose date <= that sample date.
         first_nav = float(active.iloc[0]["nav"])
         target_nav = float(active.iloc[-1]["nav"])
 
-        # Each entry: (event_date, units_added, invested_added)
+        # Build event list (lumpsum + SIPs) — each entry: (event_date, units_added, invested_added)
         events: List = []
         if f.investment_amount and first_nav > 0:
             events.append((purchase_dt, (f.investment_amount / first_nav), float(f.investment_amount)))
@@ -722,32 +725,17 @@ def historical_snapshot(req: HistoricalSnapshotRequest):
         invested_this  = sum(a for _, _, a in events)
         current_val    = total_units * target_nav
 
-        # Portfolio curve — at each sampled historical date, compute units-held
-        # by summing only the SIP events with event_date <= sample_date.
-        step = max(1, len(active) // 60)
-        event_dates  = [e[0] for e in events]
-        event_units  = [e[1] for e in events]
-        # Cumulative units running total, aligned to events
-        cum_units = []
-        running = 0.0
-        for u in event_units:
-            running += u
-            cum_units.append(running)
+        # Cumulative units aligned to events (used later at each grid date)
+        event_dates_np = pd.Series([e[0] for e in events])
+        cum_units_np   = pd.Series([e[1] for e in events]).cumsum().tolist()
 
-        for i in range(0, len(active), step):
-            row = active.iloc[i]
-            row_date = row["date"]
-            # Binary-search-friendly: how many events happened by row_date?
-            idx = 0
-            for j, ed in enumerate(event_dates):
-                if ed <= row_date:
-                    idx = j + 1
-                else:
-                    break
-            units_at = cum_units[idx - 1] if idx > 0 else 0.0
-            if units_at == 0: continue
-            date_str = str(row_date.date())
-            portfolio_curve[date_str] = portfolio_curve.get(date_str, 0) + units_at * float(row["nav"])
+        fund_states.append({
+            "code":         f.scheme_code,
+            "purchase_dt":  purchase_dt,
+            "event_dates":  event_dates_np,
+            "cum_units":    cum_units_np,
+            "nav_df":       active,   # date-sorted, already filtered to <= target
+        })
 
         fund_snapshots.append({
             "scheme_code":   f.scheme_code,
@@ -761,8 +749,35 @@ def historical_snapshot(req: HistoricalSnapshotRequest):
         total_invested += invested_this
         total_value    += current_val
 
-    # Sort portfolio curve chronologically
-    curve = [{"date": d, "value": round(v, 2)} for d, v in sorted(portfolio_curve.items())]
+    # ── Portfolio curve on a SHARED date grid ────────────────────────────
+    # 60 evenly-spaced dates from the earliest fund's purchase to target.
+    # For each grid date, sum (units_held × NAV) across every fund that
+    # existed by then. NAV is forward-filled (as-of), so weekends and
+    # missing days don't leave holes.
+    curve: List[Dict] = []
+    if fund_states:
+        global_start = min(fs["purchase_dt"] for fs in fund_states)
+        n_points     = min(60, max(2, (target - global_start).days))
+        grid_dates   = pd.date_range(start=global_start, end=target, periods=n_points)
+
+        for gd in grid_dates:
+            value = 0.0
+            for fs in fund_states:
+                if gd < fs["purchase_dt"]:
+                    continue
+                # Units held at gd = cum_units at last event with date <= gd
+                idx = int((fs["event_dates"] <= gd).sum())
+                if idx == 0:
+                    continue
+                units_at = fs["cum_units"][idx - 1]
+                # NAV at gd — latest NAV row on-or-before gd (forward-fill)
+                nav_slice = fs["nav_df"][fs["nav_df"]["date"] <= gd]
+                if nav_slice.empty:
+                    continue
+                nav_at_gd = float(nav_slice.iloc[-1]["nav"])
+                value += units_at * nav_at_gd
+            if value > 0:
+                curve.append({"date": str(gd.date()), "value": round(value, 2)})
 
     # Drawdown analytics from the curve
     peak_value = 0
